@@ -1,4 +1,4 @@
-This is Python version 3.9.0 beta 1
+This is TyPy version 0.1.0 alpha 0
 ===================================
 
 .. image:: https://travis-ci.org/python/cpython.svg?branch=master
