@@ -6,6 +6,7 @@ import dataclasses
 import importlib.metadata
 import io
 import json
+import lzma
 import os
 import pathlib
 import pickle
@@ -18,10 +19,13 @@ from datetime import date, datetime, time, timedelta, timezone
 from functools import cached_property
 
 from . import _support as test_support
-from ._support import OS_ENV_LOCK, TZPATH_TEST_LOCK, ZoneInfoTestBase
-from test.support.import_helper import import_module
+from ._support import (
+    OS_ENV_LOCK,
+    TZPATH_LOCK,
+    TZPATH_TEST_LOCK,
+    ZoneInfoTestBase,
+)
 
-lzma = import_module('lzma')
 py_zoneinfo, c_zoneinfo = test_support.get_modules()
 
 try:
@@ -361,6 +365,7 @@ class ZoneInfoTest(TzPathUserMixin, ZoneInfoTestBase):
                     self.assertEqual(dt.dst(), offset.dst, dt)
 
     def test_folds_from_utc(self):
+        tests = []
         for key in self.zones():
             zi = self.zone_from_key(key)
             with self.subTest(key=key):
@@ -463,7 +468,7 @@ class CZoneInfoDatetimeSubclassTest(DatetimeSubclassMixin, CZoneInfoTest):
     pass
 
 
-class ZoneInfoSubclassTest(ZoneInfoTest):
+class ZoneInfoTestSubclass(ZoneInfoTest):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -484,7 +489,7 @@ class ZoneInfoSubclassTest(ZoneInfoTest):
         self.assertIsInstance(sub_obj, self.klass)
 
 
-class CZoneInfoSubclassTest(ZoneInfoSubclassTest):
+class CZoneInfoTestSubclass(ZoneInfoTest):
     module = c_zoneinfo
 
 
@@ -922,7 +927,7 @@ class TZStrTest(ZoneInfoTestBase):
         # the Version 2+ file. In this case, we have no transitions, just
         # the tzstr in the footer, so up to the footer, the files are
         # identical and we can just write the same file twice in a row.
-        for _ in range(2):
+        for i in range(2):
             out += b"TZif"  # Magic value
             out += b"3"  # Version
             out += b" " * 15  # Reserved
@@ -947,6 +952,7 @@ class TZStrTest(ZoneInfoTestBase):
         return self.klass.from_file(zonefile, key=tzstr)
 
     def test_tzstr_localized(self):
+        i = 0
         for tzstr, cases in self.test_cases.items():
             with self.subTest(tzstr=tzstr):
                 zi = self.zone_from_tzstr(tzstr)
@@ -1403,50 +1409,44 @@ class ZoneInfoPickleTest(TzPathUserMixin, ZoneInfoTestBase):
         return [self.zoneinfo_data.tzpath]
 
     def test_cache_hit(self):
-        for proto in range(pickle.HIGHEST_PROTOCOL + 1):
-            with self.subTest(proto=proto):
-                zi_in = self.klass("Europe/Dublin")
-                pkl = pickle.dumps(zi_in, protocol=proto)
-                zi_rt = pickle.loads(pkl)
+        zi_in = self.klass("Europe/Dublin")
+        pkl = pickle.dumps(zi_in)
+        zi_rt = pickle.loads(pkl)
 
-                with self.subTest(test="Is non-pickled ZoneInfo"):
-                    self.assertIs(zi_in, zi_rt)
+        with self.subTest(test="Is non-pickled ZoneInfo"):
+            self.assertIs(zi_in, zi_rt)
 
-                zi_rt2 = pickle.loads(pkl)
-                with self.subTest(test="Is unpickled ZoneInfo"):
-                    self.assertIs(zi_rt, zi_rt2)
+        zi_rt2 = pickle.loads(pkl)
+        with self.subTest(test="Is unpickled ZoneInfo"):
+            self.assertIs(zi_rt, zi_rt2)
 
     def test_cache_miss(self):
-        for proto in range(pickle.HIGHEST_PROTOCOL + 1):
-            with self.subTest(proto=proto):
-                zi_in = self.klass("Europe/Dublin")
-                pkl = pickle.dumps(zi_in, protocol=proto)
+        zi_in = self.klass("Europe/Dublin")
+        pkl = pickle.dumps(zi_in)
 
-                del zi_in
-                self.klass.clear_cache()  # Induce a cache miss
-                zi_rt = pickle.loads(pkl)
-                zi_rt2 = pickle.loads(pkl)
+        del zi_in
+        self.klass.clear_cache()  # Induce a cache miss
+        zi_rt = pickle.loads(pkl)
+        zi_rt2 = pickle.loads(pkl)
 
-                self.assertIs(zi_rt, zi_rt2)
+        self.assertIs(zi_rt, zi_rt2)
 
     def test_no_cache(self):
-        for proto in range(pickle.HIGHEST_PROTOCOL + 1):
-            with self.subTest(proto=proto):
-                zi_no_cache = self.klass.no_cache("Europe/Dublin")
+        zi_no_cache = self.klass.no_cache("Europe/Dublin")
 
-                pkl = pickle.dumps(zi_no_cache, protocol=proto)
-                zi_rt = pickle.loads(pkl)
+        pkl = pickle.dumps(zi_no_cache)
+        zi_rt = pickle.loads(pkl)
 
-                with self.subTest(test="Not the pickled object"):
-                    self.assertIsNot(zi_rt, zi_no_cache)
+        with self.subTest(test="Not the pickled object"):
+            self.assertIsNot(zi_rt, zi_no_cache)
 
-                zi_rt2 = pickle.loads(pkl)
-                with self.subTest(test="Not a second unpickled object"):
-                    self.assertIsNot(zi_rt, zi_rt2)
+        zi_rt2 = pickle.loads(pkl)
+        with self.subTest(test="Not a second unpickled object"):
+            self.assertIsNot(zi_rt, zi_rt2)
 
-                zi_cache = self.klass("Europe/Dublin")
-                with self.subTest(test="Not a cached object"):
-                    self.assertIsNot(zi_rt, zi_cache)
+        zi_cache = self.klass("Europe/Dublin")
+        with self.subTest(test="Not a cached object"):
+            self.assertIsNot(zi_rt, zi_cache)
 
     def test_from_file(self):
         key = "Europe/Dublin"
@@ -1462,38 +1462,35 @@ class ZoneInfoPickleTest(TzPathUserMixin, ZoneInfoTestBase):
         ]
 
         for zi, test_name in test_cases:
-            for proto in range(pickle.HIGHEST_PROTOCOL + 1):
-                with self.subTest(test_name=test_name, proto=proto):
-                    with self.assertRaises(pickle.PicklingError):
-                        pickle.dumps(zi, protocol=proto)
+            with self.subTest(test_name=test_name):
+                with self.assertRaises(pickle.PicklingError):
+                    pickle.dumps(zi)
 
     def test_pickle_after_from_file(self):
         # This may be a bit of paranoia, but this test is to ensure that no
         # global state is maintained in order to handle the pickle cache and
         # from_file behavior, and that it is possible to interweave the
         # constructors of each of these and pickling/unpickling without issues.
-        for proto in range(pickle.HIGHEST_PROTOCOL + 1):
-            with self.subTest(proto=proto):
-                key = "Europe/Dublin"
-                zi = self.klass(key)
+        key = "Europe/Dublin"
+        zi = self.klass(key)
 
-                pkl_0 = pickle.dumps(zi, protocol=proto)
-                zi_rt_0 = pickle.loads(pkl_0)
-                self.assertIs(zi, zi_rt_0)
+        pkl_0 = pickle.dumps(zi)
+        zi_rt_0 = pickle.loads(pkl_0)
+        self.assertIs(zi, zi_rt_0)
 
-                with open(self.zoneinfo_data.path_from_key(key), "rb") as f:
-                    zi_ff = self.klass.from_file(f, key=key)
+        with open(self.zoneinfo_data.path_from_key(key), "rb") as f:
+            zi_ff = self.klass.from_file(f, key=key)
 
-                pkl_1 = pickle.dumps(zi, protocol=proto)
-                zi_rt_1 = pickle.loads(pkl_1)
-                self.assertIs(zi, zi_rt_1)
+        pkl_1 = pickle.dumps(zi)
+        zi_rt_1 = pickle.loads(pkl_1)
+        self.assertIs(zi, zi_rt_1)
 
-                with self.assertRaises(pickle.PicklingError):
-                    pickle.dumps(zi_ff, protocol=proto)
+        with self.assertRaises(pickle.PicklingError):
+            pickle.dumps(zi_ff)
 
-                pkl_2 = pickle.dumps(zi, protocol=proto)
-                zi_rt_2 = pickle.loads(pkl_2)
-                self.assertIs(zi, zi_rt_2)
+        pkl_2 = pickle.dumps(zi)
+        zi_rt_2 = pickle.loads(pkl_2)
+        self.assertIs(zi, zi_rt_2)
 
 
 class CZoneInfoPickleTest(ZoneInfoPickleTest):

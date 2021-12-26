@@ -8,8 +8,7 @@ from typing import Dict, Any
 from urllib.request import urlretrieve
 
 argparser = argparse.ArgumentParser(
-    prog="download_pypi_packages",
-    description="Helper program to download PyPI packages",
+    prog="download_pypi_packages", description="Helper program to download PyPI packages",
 )
 argparser.add_argument(
     "-n", "--number", type=int, default=100, help="Number of packages to download"
@@ -73,7 +72,7 @@ def main() -> None:
 
         package_json = load_json(package_name)
         try:
-            print(f"Downloading and compressing package {package_name} ... ", end="")
+            print(f"Dowloading and compressing package {package_name} ... ", end="")
             download_package_code(package_name, package_json)
             print("Done")
         except (IndexError, KeyError):

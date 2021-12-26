@@ -21,9 +21,8 @@ _PySSL_msg_callback(int write_p, int version, int content_type,
     threadstate = PyGILState_Ensure();
 
     ssl_obj = (PySSLSocket *)SSL_get_app_data(ssl);
-    assert(Py_IS_TYPE(ssl_obj, get_state_sock(ssl_obj)->PySSLSocket_Type));
+    assert(PySSLSocket_Check(ssl_obj));
     if (ssl_obj->ctx->msg_cb == NULL) {
-        PyGILState_Release(threadstate);
         return;
     }
 
@@ -114,6 +113,8 @@ _PySSLContext_set_msg_callback(PySSLContext *self, PyObject *arg, void *c) {
     return 0;
 }
 
+#ifdef HAVE_OPENSSL_KEYLOG
+
 static void
 _PySSL_keylog_callback(const SSL *ssl, const char *line)
 {
@@ -123,12 +124,6 @@ _PySSL_keylog_callback(const SSL *ssl, const char *line)
     static PyThread_type_lock *lock = NULL;
 
     threadstate = PyGILState_Ensure();
-
-    ssl_obj = (PySSLSocket *)SSL_get_app_data(ssl);
-    assert(Py_IS_TYPE(ssl_obj, get_state_sock(ssl_obj)->PySSLSocket_Type));
-    if (ssl_obj->ctx->keylog_bio == NULL) {
-        return;
-    }
 
     /* Allocate a static lock to synchronize writes to keylog file.
      * The lock is neither released on exit nor on fork(). The lock is
@@ -144,6 +139,12 @@ _PySSL_keylog_callback(const SSL *ssl, const char *line)
                         &ssl_obj->exc_tb);
             return;
         }
+    }
+
+    ssl_obj = (PySSLSocket *)SSL_get_app_data(ssl);
+    assert(PySSLSocket_Check(ssl_obj));
+    if (ssl_obj->ctx->keylog_bio == NULL) {
+        return;
     }
 
     PySSL_BEGIN_ALLOW_THREADS
@@ -199,7 +200,7 @@ _PySSLContext_set_keylog_filename(PySSLContext *self, PyObject *arg, void *c) {
 
     self->keylog_bio = BIO_new_fp(fp, BIO_CLOSE | BIO_FP_TEXT);
     if (self->keylog_bio == NULL) {
-        PyErr_SetString(get_state_ctx(self)->PySSLErrorObject,
+        PyErr_SetString(PySSLErrorObject,
                         "Can't malloc memory for keylog file");
         return -1;
     }
@@ -217,3 +218,5 @@ _PySSLContext_set_keylog_filename(PySSLContext *self, PyObject *arg, void *c) {
     SSL_CTX_set_keylog_callback(self->ctx, _PySSL_keylog_callback);
     return 0;
 }
+
+#endif

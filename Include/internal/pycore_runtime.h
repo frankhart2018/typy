@@ -8,10 +8,8 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
-#include "pycore_atomic.h"          /* _Py_atomic_address */
-#include "pycore_gil.h"             // struct _gil_runtime_state
-#include "pycore_global_objects.h"  // struct _Py_global_objects
-#include "pycore_unicodeobject.h"   // struct _Py_unicode_runtime_ids
+#include "pycore_atomic.h"    /* _Py_atomic_address */
+#include "pycore_gil.h"       // struct _gil_runtime_state
 
 /* ceval state */
 
@@ -54,12 +52,6 @@ typedef struct _Py_AuditHookEntry {
 /* Full Python runtime state */
 
 typedef struct pyruntimestate {
-    /* Has been initialized to a safe state.
-
-       In order to be effective, this must be set to 0 during or right
-       after allocation. */
-    int _initialized;
-
     /* Is running Py_PreInitialize()? */
     int preinitializing;
 
@@ -110,32 +102,16 @@ typedef struct pyruntimestate {
 
     PyPreConfig preconfig;
 
-    // Audit values must be preserved when Py_Initialize()/Py_Finalize()
-    // is called multiple times.
     Py_OpenCodeHookFunction open_code_hook;
     void *open_code_userdata;
     _Py_AuditHookEntry *audit_hook_head;
 
-    struct _Py_unicode_runtime_ids unicode_ids;
-
-    struct _Py_global_objects global_objects;
-    // If anything gets added after global_objects then
-    // _PyRuntimeState_reset() needs to get updated to clear it.
+    // XXX Consolidate globals found via the check-c-globals script.
 } _PyRuntimeState;
 
 #define _PyRuntimeState_INIT \
-    { \
-        .global_objects = _Py_global_objects_INIT, \
-    }
+    {.preinitialized = 0, .core_initialized = 0, .initialized = 0}
 /* Note: _PyRuntimeState_INIT sets other fields to 0/NULL */
-
-static inline void
-_PyRuntimeState_reset(_PyRuntimeState *runtime)
-{
-    /* Make it match _PyRuntimeState_INIT. */
-    memset(runtime, 0, (size_t)&runtime->global_objects - (size_t)runtime);
-    _Py_global_objects_reset(&runtime->global_objects);
-}
 
 
 PyAPI_DATA(_PyRuntimeState) _PyRuntime;
@@ -144,7 +120,7 @@ PyAPI_FUNC(PyStatus) _PyRuntimeState_Init(_PyRuntimeState *runtime);
 PyAPI_FUNC(void) _PyRuntimeState_Fini(_PyRuntimeState *runtime);
 
 #ifdef HAVE_FORK
-extern PyStatus _PyRuntimeState_ReInitThreads(_PyRuntimeState *runtime);
+PyAPI_FUNC(void) _PyRuntimeState_ReInitThreads(_PyRuntimeState *runtime);
 #endif
 
 /* Initialize _PyRuntimeState.

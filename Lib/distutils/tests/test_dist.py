@@ -12,9 +12,8 @@ from distutils.dist import Distribution, fix_help_options
 from distutils.cmd import Command
 
 from test.support import (
-     captured_stdout, captured_stderr, run_unittest
+     TESTFN, captured_stdout, captured_stderr, run_unittest
 )
-from test.support.os_helper import TESTFN
 from distutils.tests import support
 from distutils import log
 
@@ -521,8 +520,8 @@ class MetadataTestCase(support.TempdirManager, support.EnvironGuard,
 
 def test_suite():
     suite = unittest.TestSuite()
-    suite.addTest(unittest.TestLoader().loadTestsFromTestCase(DistributionTestCase))
-    suite.addTest(unittest.TestLoader().loadTestsFromTestCase(MetadataTestCase))
+    suite.addTest(unittest.makeSuite(DistributionTestCase))
+    suite.addTest(unittest.makeSuite(MetadataTestCase))
     return suite
 
 if __name__ == "__main__":

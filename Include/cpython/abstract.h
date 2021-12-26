@@ -2,6 +2,10 @@
 #  error "this header file must not be included directly"
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* === Object Protocol ================================================== */
 
 #ifdef PY_SSIZE_T_CLEAN
@@ -58,13 +62,71 @@ PyVectorcall_NARGS(size_t n)
     return n & ~PY_VECTORCALL_ARGUMENTS_OFFSET;
 }
 
-PyAPI_FUNC(vectorcallfunc) PyVectorcall_Function(PyObject *callable);
+static inline vectorcallfunc
+PyVectorcall_Function(PyObject *callable)
+{
+    PyTypeObject *tp;
+    Py_ssize_t offset;
+    vectorcallfunc *ptr;
 
-PyAPI_FUNC(PyObject *) PyObject_Vectorcall(
-    PyObject *callable,
-    PyObject *const *args,
-    size_t nargsf,
-    PyObject *kwnames);
+    assert(callable != NULL);
+    tp = Py_TYPE(callable);
+    if (!PyType_HasFeature(tp, Py_TPFLAGS_HAVE_VECTORCALL)) {
+        return NULL;
+    }
+    assert(PyCallable_Check(callable));
+    offset = tp->tp_vectorcall_offset;
+    assert(offset > 0);
+    ptr = (vectorcallfunc *)(((char *)callable) + offset);
+    return *ptr;
+}
+
+/* Call the callable object 'callable' with the "vectorcall" calling
+   convention.
+
+   args is a C array for positional arguments.
+
+   nargsf is the number of positional arguments plus optionally the flag
+   PY_VECTORCALL_ARGUMENTS_OFFSET which means that the caller is allowed to
+   modify args[-1].
+
+   kwnames is a tuple of keyword names. The values of the keyword arguments
+   are stored in "args" after the positional arguments (note that the number
+   of keyword arguments does not change nargsf). kwnames can also be NULL if
+   there are no keyword arguments.
+
+   keywords must only contain strings and all keys must be unique.
+
+   Return the result on success. Raise an exception and return NULL on
+   error. */
+static inline PyObject *
+_PyObject_VectorcallTstate(PyThreadState *tstate, PyObject *callable,
+                           PyObject *const *args, size_t nargsf,
+                           PyObject *kwnames)
+{
+    vectorcallfunc func;
+    PyObject *res;
+
+    assert(kwnames == NULL || PyTuple_Check(kwnames));
+    assert(args != NULL || PyVectorcall_NARGS(nargsf) == 0);
+
+    func = PyVectorcall_Function(callable);
+    if (func == NULL) {
+        Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+        return _PyObject_MakeTpCall(tstate, callable, args, nargs, kwnames);
+    }
+    res = func(callable, args, nargsf, kwnames);
+    return _Py_CheckFunctionResult(tstate, callable, res, NULL);
+}
+
+static inline PyObject *
+PyObject_Vectorcall(PyObject *callable, PyObject *const *args,
+                     size_t nargsf, PyObject *kwnames)
+{
+    PyThreadState *tstate = PyThreadState_GET();
+    return _PyObject_VectorcallTstate(tstate, callable,
+                                      args, nargsf, kwnames);
+}
 
 // Backwards compatibility aliases for API that was provisional in Python 3.8
 #define _PyObject_Vectorcall PyObject_Vectorcall
@@ -87,13 +149,44 @@ PyAPI_FUNC(PyObject *) PyObject_VectorcallDict(
    "tuple" and keyword arguments "dict". "dict" may also be NULL */
 PyAPI_FUNC(PyObject *) PyVectorcall_Call(PyObject *callable, PyObject *tuple, PyObject *dict);
 
-// Same as PyObject_Vectorcall(), except without keyword arguments
-PyAPI_FUNC(PyObject *) _PyObject_FastCall(
-    PyObject *func,
-    PyObject *const *args,
-    Py_ssize_t nargs);
+static inline PyObject *
+_PyObject_FastCallTstate(PyThreadState *tstate, PyObject *func, PyObject *const *args, Py_ssize_t nargs)
+{
+    return _PyObject_VectorcallTstate(tstate, func, args, (size_t)nargs, NULL);
+}
 
-PyAPI_FUNC(PyObject *) PyObject_CallOneArg(PyObject *func, PyObject *arg);
+/* Same as PyObject_Vectorcall except without keyword arguments */
+static inline PyObject *
+_PyObject_FastCall(PyObject *func, PyObject *const *args, Py_ssize_t nargs)
+{
+    PyThreadState *tstate = PyThreadState_GET();
+    return _PyObject_FastCallTstate(tstate, func, args, nargs);
+}
+
+/* Call a callable without any arguments
+   Private static inline function variant of public function
+   PyObject_CallNoArgs(). */
+static inline PyObject *
+_PyObject_CallNoArg(PyObject *func) {
+    PyThreadState *tstate = PyThreadState_GET();
+    return _PyObject_VectorcallTstate(tstate, func, NULL, 0, NULL);
+}
+
+static inline PyObject *
+PyObject_CallOneArg(PyObject *func, PyObject *arg)
+{
+    PyObject *_args[2];
+    PyObject **args;
+    PyThreadState *tstate;
+    size_t nargsf;
+
+    assert(arg != NULL);
+    args = _args + 1;  // For PY_VECTORCALL_ARGUMENTS_OFFSET
+    args[0] = arg;
+    tstate = PyThreadState_GET();
+    nargsf = 1 | PY_VECTORCALL_ARGUMENTS_OFFSET;
+    return _PyObject_VectorcallTstate(tstate, func, args, nargsf, NULL);
+}
 
 PyAPI_FUNC(PyObject *) PyObject_VectorcallMethod(
     PyObject *name, PyObject *const *args,
@@ -183,17 +276,17 @@ PyAPI_FUNC(int) PyObject_GetBuffer(PyObject *obj, Py_buffer *view,
 
 /* Get the memory area pointed to by the indices for the buffer given.
    Note that view->ndim is the assumed size of indices. */
-PyAPI_FUNC(void *) PyBuffer_GetPointer(const Py_buffer *view, const Py_ssize_t *indices);
+PyAPI_FUNC(void *) PyBuffer_GetPointer(Py_buffer *view, Py_ssize_t *indices);
 
 /* Return the implied itemsize of the data-format area from a
    struct-style description. */
 PyAPI_FUNC(Py_ssize_t) PyBuffer_SizeFromFormat(const char *format);
 
 /* Implementation in memoryobject.c */
-PyAPI_FUNC(int) PyBuffer_ToContiguous(void *buf, const Py_buffer *view,
+PyAPI_FUNC(int) PyBuffer_ToContiguous(void *buf, Py_buffer *view,
                                       Py_ssize_t len, char order);
 
-PyAPI_FUNC(int) PyBuffer_FromContiguous(const Py_buffer *view, const void *buf,
+PyAPI_FUNC(int) PyBuffer_FromContiguous(Py_buffer *view, void *buf,
                                         Py_ssize_t len, char order);
 
 /* Copy len bytes of data from the contiguous chunk of memory
@@ -235,6 +328,12 @@ PyAPI_FUNC(int) PyBuffer_FillInfo(Py_buffer *view, PyObject *o, void *buf,
 
 /* Releases a Py_buffer obtained from getbuffer ParseTuple's "s*". */
 PyAPI_FUNC(void) PyBuffer_Release(Py_buffer *view);
+
+/* ==== Iterators ================================================ */
+
+#define PyIter_Check(obj) \
+    (Py_TYPE(obj)->tp_iternext != NULL && \
+     Py_TYPE(obj)->tp_iternext != &_PyObject_NextNotImplemented)
 
 /* === Sequence protocol ================================================ */
 
@@ -280,5 +379,6 @@ PyAPI_FUNC(void) _Py_add_one_to_index_C(int nd, Py_ssize_t *index,
 /* Convert Python int to Py_ssize_t. Do nothing if the argument is None. */
 PyAPI_FUNC(int) _Py_convert_optional_to_ssize_t(PyObject *, void *);
 
-/* Same as PyNumber_Index but can return an instance of a subclass of int. */
-PyAPI_FUNC(PyObject *) _PyNumber_Index(PyObject *o);
+#ifdef __cplusplus
+}
+#endif

@@ -5,7 +5,7 @@ import os
 import subprocess
 import uuid
 import winreg
-from test.support import os_helper
+from test import support
 from test.libregrtest.utils import print_warning
 
 
@@ -69,9 +69,7 @@ class WindowsLoadTracker():
         # Spawn off the load monitor
         counter_name = self._get_counter_name()
         command = ['typeperf', counter_name, '-si', str(SAMPLING_INTERVAL)]
-        self._popen = subprocess.Popen(' '.join(command),
-                                       stdout=command_stdout,
-                                       cwd=os_helper.SAVEDCWD)
+        self._popen = subprocess.Popen(' '.join(command), stdout=command_stdout, cwd=support.SAVEDCWD)
 
         # Close our copy of the write end of the pipe
         os.close(command_stdout)

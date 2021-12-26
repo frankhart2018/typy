@@ -1,7 +1,6 @@
 /* Class object implementation (dead now except for methods) */
 
 #include "Python.h"
-#include "pycore_call.h"          // _PyObject_VectorcallTstate()
 #include "pycore_object.h"
 #include "pycore_pyerrors.h"
 #include "pycore_pystate.h"       // _PyThreadState_GET()
@@ -463,7 +462,7 @@ instancemethod_traverse(PyObject *self, visitproc visit, void *arg) {
 static PyObject *
 instancemethod_call(PyObject *self, PyObject *arg, PyObject *kw)
 {
-    return PyObject_Call(PyInstanceMethod_GET_FUNCTION(self), arg, kw);
+    return PyObject_Call(PyMethod_GET_FUNCTION(self), arg, kw);
 }
 
 static PyObject *

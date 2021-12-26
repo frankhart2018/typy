@@ -1,23 +1,18 @@
 name: TestsMSI
 
 on:
-  workflow_dispatch:
   push:
     branches:
-    - 'main'
-    - '3.10'
-    - '3.9'
-    - '3.8'
-    - '3.7'
+    - master
+    - 3.8
+    - 3.7
     paths:
     - 'Tools/msi/**'
   pull_request:
     branches:
-    - 'main'
-    - '3.10'
-    - '3.9'
-    - '3.8'
-    - '3.7'
+    - master
+    - 3.8
+    - 3.7
     paths:
     - 'Tools/msi/**'
 
@@ -26,7 +21,7 @@ jobs:
     name: 'Windows (x86) Installer'
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v1
     - name: Build CPython installer
       run: .\Tools\msi\build.bat -x86
 
@@ -34,6 +29,6 @@ jobs:
     name: 'Windows (x64) Installer'
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v1
     - name: Build CPython installer
       run: .\Tools\msi\build.bat -x64

@@ -920,9 +920,6 @@ errno_exec(PyObject *module)
 #ifdef ESHLIBVERS
     add_errcode("ESHLIBVERS", ESHLIBVERS, "Shared library version mismatch");
 #endif
-#ifdef EQFULL
-    add_errcode("EQFULL", EQFULL, "Interface output queue is full");
-#endif
 
     Py_DECREF(error_dict);
     return 0;

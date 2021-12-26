@@ -45,21 +45,19 @@ Typical usage:
 """
 
 import os
+import platform
 import sys
 
-from enum import Enum, _simple_enum
+from enum import Enum
 
 
 __author__ = 'Ka-Ping Yee <ping@zesty.ca>'
 
 # The recognized platforms - known behaviors
-if sys.platform in ('win32', 'darwin'):
-    _AIX = _LINUX = False
-else:
-    import platform
-    _platform_system = platform.system()
-    _AIX     = _platform_system == 'AIX'
-    _LINUX   = _platform_system == 'Linux'
+_AIX     = platform.system() == 'AIX'
+_DARWIN  = platform.system() == 'Darwin'
+_LINUX   = platform.system() == 'Linux'
+_WINDOWS = platform.system() == 'Windows'
 
 _MAC_DELIM = b':'
 _MAC_OMITS_LEADING_ZEROES = False
@@ -75,8 +73,7 @@ int_ = int      # The built-in int type
 bytes_ = bytes  # The built-in bytes type
 
 
-@_simple_enum(Enum)
-class SafeUUID:
+class SafeUUID(Enum):
     safe = 0
     unsafe = -1
     unknown = None
@@ -186,7 +183,7 @@ class UUID:
             if len(bytes) != 16:
                 raise ValueError('bytes is not a 16-char string')
             assert isinstance(bytes, bytes_), repr(bytes)
-            int = int_.from_bytes(bytes)  # big endian
+            int = int_.from_bytes(bytes, byteorder='big')
         if fields is not None:
             if len(fields) != 6:
                 raise ValueError('fields is not a 6-tuple')
@@ -284,7 +281,7 @@ class UUID:
 
     @property
     def bytes(self):
-        return self.int.to_bytes(16)  # big endian
+        return self.int.to_bytes(16, 'big')
 
     @property
     def bytes_le(self):
@@ -621,9 +618,9 @@ def _random_getnode():
 #     @unittest.skipUnless(_uuid._ifconfig_getnode in _uuid._GETTERS, ...)
 if _LINUX:
     _OS_GETTERS = [_ip_getnode, _ifconfig_getnode]
-elif sys.platform == 'darwin':
+elif _DARWIN:
     _OS_GETTERS = [_ifconfig_getnode, _arp_getnode, _netstat_getnode]
-elif sys.platform == 'win32':
+elif _WINDOWS:
     # bpo-40201: _windll_getnode will always succeed, so these are not needed
     _OS_GETTERS = []
 elif _AIX:

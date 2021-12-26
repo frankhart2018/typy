@@ -4,9 +4,10 @@ import os
 import pathlib
 import sys
 import textwrap
-import token
 import tokenize
-from typing import IO, Any, Dict, Final, Type, cast
+import token
+
+from typing import Any, cast, Dict, IO, Type, Final
 
 from pegen.build import compile_c_extension
 from pegen.c_generator import CParserGenerator
@@ -17,7 +18,7 @@ from pegen.python_generator import PythonParserGenerator
 from pegen.tokenizer import Tokenizer
 
 ALL_TOKENS = token.tok_name
-EXACT_TOKENS = token.EXACT_TOKEN_TYPES
+EXACT_TOKENS = token.EXACT_TOKEN_TYPES  # type: ignore
 NON_EXACT_TOKENS = {
     name for index, name in token.tok_name.items() if index not in EXACT_TOKENS.values()
 }
@@ -41,7 +42,7 @@ def run_parser(file: IO[bytes], parser_class: Type[Parser], *, verbose: bool = F
     parser = parser_class(tokenizer, verbose=verbose)
     result = parser.start()
     if result is None:
-        raise parser.make_syntax_error("invalid syntax")
+        raise parser.make_syntax_error()
     return result
 
 
@@ -65,7 +66,6 @@ def import_file(full_name: str, path: str) -> Any:
     """Import a python module from a path"""
 
     spec = importlib.util.spec_from_file_location(full_name, path)
-    assert spec is not None
     mod = importlib.util.module_from_spec(spec)
 
     # We assume this is not None and has an exec_module() method.
@@ -96,7 +96,7 @@ def generate_parser_c_extension(
     # context.
     assert not os.listdir(path)
     source = path / "parse.c"
-    with open(source, "w", encoding="utf-8") as file:
+    with open(source, "w") as file:
         genr = CParserGenerator(
             grammar, ALL_TOKENS, EXACT_TOKENS, NON_EXACT_TOKENS, file, debug=debug
         )

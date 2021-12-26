@@ -1,11 +1,10 @@
 import unittest
 from test import support
-from test.support import import_helper
 from test.support import socket_helper
 import smtplib
 import socket
 
-ssl = import_helper.import_module("ssl")
+ssl = support.import_module("ssl")
 
 support.requires("network")
 

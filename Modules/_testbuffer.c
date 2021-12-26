@@ -236,7 +236,7 @@ ndarray_dealloc(NDArrayObject *self)
                 ndbuf_pop(self);
         }
     }
-    PyObject_Free(self);
+    PyObject_Del(self);
 }
 
 static int
@@ -2734,7 +2734,7 @@ staticarray_init(PyObject *self, PyObject *args, PyObject *kwds)
 static void
 staticarray_dealloc(StaticArrayObject *self)
 {
-    PyObject_Free(self);
+    PyObject_Del(self);
 }
 
 /* Return a buffer for a PyBUF_FULL_RO request. Flags are not checked,

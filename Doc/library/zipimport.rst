@@ -23,8 +23,8 @@ and a path within the archive can be specified to only import from a
 subdirectory.  For example, the path :file:`example.zip/lib/` would only
 import from the :file:`lib/` subdirectory within the archive.
 
-Any files may be present in the ZIP archive, but importers are only invoked for
-:file:`.py` and :file:`.pyc` files.  ZIP import of dynamic modules
+Any files may be present in the ZIP archive, but only files :file:`.py` and
+:file:`.pyc` are available for import.  ZIP import of dynamic modules
 (:file:`.pyd`, :file:`.so`) is disallowed. Note that if an archive only contains
 :file:`.py` files, Python will not attempt to modify the archive by adding the
 corresponding :file:`.pyc` file, meaning that if a ZIP archive
@@ -44,9 +44,8 @@ doesn't contain :file:`.pyc` files, importing may be rather slow.
       follows the specification in :pep:`273`, but uses an implementation written by Just
       van Rossum that uses the import hooks described in :pep:`302`.
 
-   :mod:`importlib` - The implementation of the import machinery
-      Package providing the relevant protocols for all importers to
-      implement.
+   :pep:`302` - New Import Hooks
+      The PEP to add the import hooks that help this module work.
 
 
 This module defines an exception:
@@ -74,31 +73,7 @@ zipimporter Objects
    :exc:`ZipImportError` is raised if *archivepath* doesn't point to a valid ZIP
    archive.
 
-   .. method:: create_module(spec)
-
-      Implementation of :meth:`importlib.abc.Loader.create_module` that returns
-      :const:`None` to explicitly request the default semantics.
-
-      .. versionadded:: 3.10
-
-
-   .. method:: exec_module(module)
-
-      Implementation of :meth:`importlib.abc.Loader.exec_module`.
-
-      .. versionadded:: 3.10
-
-
-   .. method:: find_loader(fullname, path=None)
-
-      An implementation of :meth:`importlib.abc.PathEntryFinder.find_loader`.
-
-      .. deprecated:: 3.10
-
-         Use :meth:`find_spec` instead.
-
-
-   .. method:: find_module(fullname, path=None)
+   .. method:: find_module(fullname[, path])
 
       Search for a module specified by *fullname*. *fullname* must be the fully
       qualified (dotted) module name. It returns the zipimporter instance itself
@@ -106,22 +81,11 @@ zipimporter Objects
       *path* argument is ignored---it's there for compatibility with the
       importer protocol.
 
-      .. deprecated:: 3.10
-
-         Use :meth:`find_spec` instead.
-
-
-   .. method:: find_spec(fullname, target=None)
-
-      An implementation of :meth:`importlib.abc.PathEntryFinder.find_spec`.
-
-      .. versionadded:: 3.10
-
 
    .. method:: get_code(fullname)
 
       Return the code object for the specified module. Raise
-      :exc:`ZipImportError` if the module couldn't be imported.
+      :exc:`ZipImportError` if the module couldn't be found.
 
 
    .. method:: get_data(pathname)
@@ -137,7 +101,7 @@ zipimporter Objects
 
       Return the value ``__file__`` would be set to if the specified module
       was imported. Raise :exc:`ZipImportError` if the module couldn't be
-      imported.
+      found.
 
       .. versionadded:: 3.1
 
@@ -159,20 +123,8 @@ zipimporter Objects
    .. method:: load_module(fullname)
 
       Load the module specified by *fullname*. *fullname* must be the fully
-      qualified (dotted) module name. Returns the imported module on success,
-      raises :exc:`ZipImportError` on failure.
-
-      .. deprecated:: 3.10
-
-         Use :meth:`exec_module` instead.
-
-
-   .. method:: invalidate_caches()
-
-      Clear out the internal cache of information about files found within
-      the ZIP archive.
-
-      .. versionadded:: 3.10
+      qualified (dotted) module name. It returns the imported module, or raises
+      :exc:`ZipImportError` if it wasn't found.
 
 
    .. attribute:: archive

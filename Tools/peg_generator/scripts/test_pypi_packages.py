@@ -19,8 +19,7 @@ from scripts import test_parse_directory
 HERE = pathlib.Path(__file__).resolve().parent
 
 argparser = argparse.ArgumentParser(
-    prog="test_pypi_packages",
-    description="Helper program to test parsing PyPI packages",
+    prog="test_pypi_packages", description="Helper program to test parsing PyPI packages",
 )
 argparser.add_argument(
     "-t", "--tree", action="count", help="Compare parse tree to official AST", default=0
@@ -55,14 +54,26 @@ def find_dirname(package_name: str) -> str:
     assert False  # This is to fix mypy, should never be reached
 
 
-def run_tests(dirname: str, tree: int) -> int:
+def run_tests(dirname: str, tree: int, extension: Any) -> int:
     return test_parse_directory.parse_directory(
         dirname,
+        HERE / ".." / ".." / ".." / "Grammar" / "python.gram",
+        HERE / ".." / ".." / ".." / "Grammar" / "Tokens",
         verbose=False,
-        excluded_files=[],
+        excluded_files=[
+            "*/failset/*",
+            "*/failset/**",
+            "*/failset/**/*",
+            "*/test2to3/*",
+            "*/test2to3/**/*",
+            "*/bad*",
+            "*/lib2to3/tests/data/*",
+        ],
+        skip_actions=False,
         tree_arg=tree,
         short=True,
-        mode=1 if tree else 0,
+        extension=extension,
+        mode=1,
         parser="pegen",
     )
 
@@ -70,6 +81,13 @@ def run_tests(dirname: str, tree: int) -> int:
 def main() -> None:
     args = argparser.parse_args()
     tree = args.tree
+
+    extension = build.build_c_parser_and_generator(
+        HERE / ".." / ".." / ".." / "Grammar" / "python.gram",
+        HERE / ".." / ".." / ".." / "Grammar" / "Tokens",
+        "peg_extension/parse.c",
+        compile_extension=True,
+    )
 
     for package in get_packages():
         print(f"Extracting files from {package}... ", end="")
@@ -82,7 +100,7 @@ def main() -> None:
 
         print(f"Trying to parse all python files ... ")
         dirname = find_dirname(package)
-        status = run_tests(dirname, tree)
+        status = run_tests(dirname, tree, extension)
         if status == 0:
             shutil.rmtree(dirname)
         else:

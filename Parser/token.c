@@ -65,7 +65,6 @@ const char * const _PyParser_TokenNames[] = {
     "ASYNC",
     "TYPE_IGNORE",
     "TYPE_COMMENT",
-    "SOFT_KEYWORD",
     "<ERRORTOKEN>",
     "<COMMENT>",
     "<NL>",

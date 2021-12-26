@@ -37,7 +37,7 @@ class MultiCallTest(unittest.TestCase):
 
     def test_yview(self):
         # Added for tree.wheel_event
-        # (it depends on yview to not be overridden)
+        # (it depends on yview to not be overriden)
         mc = self.mc
         self.assertIs(mc.yview, Text.yview)
         mctext = self.mc(self.root)

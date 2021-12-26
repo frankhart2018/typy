@@ -35,7 +35,7 @@ byte-code cache files in the directory containing the source code.
    in ``.pyc``.
    For example, if *file* is ``/foo/bar/baz.py`` *cfile* will default to
    ``/foo/bar/__pycache__/baz.cpython-32.pyc`` for Python 3.2.  If *dfile* is
-   specified, it is used as the name of the source file in error messages
+   specified, it is used as the name of the source file in error messages when
    instead of *file*.  If *doraise* is true, a :exc:`PyCompileError` is raised
    when an error is encountered while compiling *file*. If *doraise* is false
    (the default), an error string is written to ``sys.stderr``, but no exception
@@ -125,33 +125,21 @@ byte-code cache files in the directory containing the source code.
       system external to Python like a build system.
 
 
-Command-Line Interface
-----------------------
+.. function:: main(args=None)
 
-This module can be invoked as a script to compile several source
-files.  The files named in *filenames* are compiled and the resulting
-bytecode is cached in the normal manner.  This program does not search
-a directory structure to locate source files; it only compiles files
-named explicitly. The exit status is nonzero if one of the files could
-not be compiled.
+   Compile several source files.  The files named in *args* (or on the command
+   line, if *args* is ``None``) are compiled and the resulting byte-code is
+   cached in the normal manner.  This function does not search a directory
+   structure to locate source files; it only compiles files named explicitly.
+   If ``'-'`` is the only parameter in args, the list of files is taken from
+   standard input.
 
-.. program:: python -m py_compile
+   .. versionchanged:: 3.2
+      Added support for ``'-'``.
 
-.. cmdoption:: <file> ... <fileN>
-               -
-
-   Positional arguments are files to compile.  If ``-`` is the only
-   parameter, the list of files is taken from standard input.
-
-.. cmdoption:: -q, --quiet
-
-   Suppress errors output.
-
-.. versionchanged:: 3.2
-   Added support for ``-``.
-
-.. versionchanged:: 3.10
-   Added support for :option:`-q`.
+When this module is run as a script, the :func:`main` is used to compile all the
+files named on the command line.  The exit status is nonzero if one of the files
+could not be compiled.
 
 
 .. seealso::

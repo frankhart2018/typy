@@ -2,15 +2,10 @@ import unittest
 import textwrap
 from test import support, mock_socket
 from test.support import socket_helper
-from test.support import warnings_helper
 import socket
 import io
-
-import warnings
-with warnings.catch_warnings():
-    warnings.simplefilter('ignore', DeprecationWarning)
-    import smtpd
-    import asyncore
+import smtpd
+import asyncore
 
 
 class DummyServer(smtpd.SMTPServer):
@@ -719,49 +714,49 @@ class SMTPDChannelTest(unittest.TestCase):
                          b'recognized\r\n')
 
     def test_attribute_deprecations(self):
-        with warnings_helper.check_warnings(('', DeprecationWarning)):
+        with support.check_warnings(('', DeprecationWarning)):
             spam = self.channel._SMTPChannel__server
-        with warnings_helper.check_warnings(('', DeprecationWarning)):
+        with support.check_warnings(('', DeprecationWarning)):
             self.channel._SMTPChannel__server = 'spam'
-        with warnings_helper.check_warnings(('', DeprecationWarning)):
+        with support.check_warnings(('', DeprecationWarning)):
             spam = self.channel._SMTPChannel__line
-        with warnings_helper.check_warnings(('', DeprecationWarning)):
+        with support.check_warnings(('', DeprecationWarning)):
             self.channel._SMTPChannel__line = 'spam'
-        with warnings_helper.check_warnings(('', DeprecationWarning)):
+        with support.check_warnings(('', DeprecationWarning)):
             spam = self.channel._SMTPChannel__state
-        with warnings_helper.check_warnings(('', DeprecationWarning)):
+        with support.check_warnings(('', DeprecationWarning)):
             self.channel._SMTPChannel__state = 'spam'
-        with warnings_helper.check_warnings(('', DeprecationWarning)):
+        with support.check_warnings(('', DeprecationWarning)):
             spam = self.channel._SMTPChannel__greeting
-        with warnings_helper.check_warnings(('', DeprecationWarning)):
+        with support.check_warnings(('', DeprecationWarning)):
             self.channel._SMTPChannel__greeting = 'spam'
-        with warnings_helper.check_warnings(('', DeprecationWarning)):
+        with support.check_warnings(('', DeprecationWarning)):
             spam = self.channel._SMTPChannel__mailfrom
-        with warnings_helper.check_warnings(('', DeprecationWarning)):
+        with support.check_warnings(('', DeprecationWarning)):
             self.channel._SMTPChannel__mailfrom = 'spam'
-        with warnings_helper.check_warnings(('', DeprecationWarning)):
+        with support.check_warnings(('', DeprecationWarning)):
             spam = self.channel._SMTPChannel__rcpttos
-        with warnings_helper.check_warnings(('', DeprecationWarning)):
+        with support.check_warnings(('', DeprecationWarning)):
             self.channel._SMTPChannel__rcpttos = 'spam'
-        with warnings_helper.check_warnings(('', DeprecationWarning)):
+        with support.check_warnings(('', DeprecationWarning)):
             spam = self.channel._SMTPChannel__data
-        with warnings_helper.check_warnings(('', DeprecationWarning)):
+        with support.check_warnings(('', DeprecationWarning)):
             self.channel._SMTPChannel__data = 'spam'
-        with warnings_helper.check_warnings(('', DeprecationWarning)):
+        with support.check_warnings(('', DeprecationWarning)):
             spam = self.channel._SMTPChannel__fqdn
-        with warnings_helper.check_warnings(('', DeprecationWarning)):
+        with support.check_warnings(('', DeprecationWarning)):
             self.channel._SMTPChannel__fqdn = 'spam'
-        with warnings_helper.check_warnings(('', DeprecationWarning)):
+        with support.check_warnings(('', DeprecationWarning)):
             spam = self.channel._SMTPChannel__peer
-        with warnings_helper.check_warnings(('', DeprecationWarning)):
+        with support.check_warnings(('', DeprecationWarning)):
             self.channel._SMTPChannel__peer = 'spam'
-        with warnings_helper.check_warnings(('', DeprecationWarning)):
+        with support.check_warnings(('', DeprecationWarning)):
             spam = self.channel._SMTPChannel__conn
-        with warnings_helper.check_warnings(('', DeprecationWarning)):
+        with support.check_warnings(('', DeprecationWarning)):
             self.channel._SMTPChannel__conn = 'spam'
-        with warnings_helper.check_warnings(('', DeprecationWarning)):
+        with support.check_warnings(('', DeprecationWarning)):
             spam = self.channel._SMTPChannel__addr
-        with warnings_helper.check_warnings(('', DeprecationWarning)):
+        with support.check_warnings(('', DeprecationWarning)):
             self.channel._SMTPChannel__addr = 'spam'
 
 @unittest.skipUnless(socket_helper.IPV6_ENABLED, "IPv6 not enabled")
@@ -1007,11 +1002,12 @@ class SMTPDChannelTestWithEnableSMTPUTF8True(unittest.TestCase):
 
 class MiscTestCase(unittest.TestCase):
     def test__all__(self):
-        not_exported = {
+        blacklist = {
             "program", "Devnull", "DEBUGSTREAM", "NEWLINE", "COMMASPACE",
             "DATA_SIZE_DEFAULT", "usage", "Options", "parseargs",
+
         }
-        support.check__all__(self, smtpd, not_exported=not_exported)
+        support.check__all__(self, smtpd, blacklist=blacklist)
 
 
 if __name__ == "__main__":

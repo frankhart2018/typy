@@ -80,6 +80,7 @@ def load_data(fobj):
     # not by position in the array but by position in the unsplit
     # abbreviation string. I suppose this makes more sense in C, which uses
     # null to terminate the strings, but it's inconvenient here...
+    char_total = 0
     abbr_vals = {}
     abbr_chars = fobj.read(charcnt)
 
@@ -136,7 +137,8 @@ class _TZifHeader:
     ]
 
     def __init__(self, *args):
-        for attr, val in zip(self.__slots__, args, strict=True):
+        assert len(self.__slots__) == len(args)
+        for attr, val in zip(self.__slots__, args):
             setattr(self, attr, val)
 
     @classmethod

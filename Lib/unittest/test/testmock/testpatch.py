@@ -1875,10 +1875,9 @@ class PatchTest(unittest.TestCase):
             self.assertEqual(foo(), 1)
         self.assertEqual(foo(), 0)
 
-        orig_doc = foo.__doc__
         with patch.object(foo, '__doc__', "FUN"):
             self.assertEqual(foo.__doc__, "FUN")
-        self.assertEqual(foo.__doc__, orig_doc)
+        self.assertEqual(foo.__doc__, "TEST")
 
         with patch.object(foo, '__module__', "testpatch2"):
             self.assertEqual(foo.__module__, "testpatch2")

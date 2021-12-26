@@ -41,17 +41,7 @@ from pegen.grammar import (
     Rhs,
 )
 
-argparser = argparse.ArgumentParser(
-    prog="graph_grammar",
-    description="Graph a grammar tree",
-)
-argparser.add_argument(
-    "-s",
-    "--start",
-    choices=["exec", "eval", "single"],
-    default="exec",
-    help="Choose the grammar's start rule (exec, eval or single)",
-)
+argparser = argparse.ArgumentParser(prog="graph_grammar", description="Graph a grammar tree",)
 argparser.add_argument("grammar_file", help="The grammar file to graph")
 
 
@@ -101,15 +91,19 @@ def main() -> None:
         references[name] = set(references_for_item(rule))
 
     # Flatten the start node if has only a single reference
-    root_node = {"exec": "file", "eval": "eval", "single": "interactive"}[args.start]
+    root_node = "start"
+    if start := references["start"]:
+        if len(start) == 1:
+            root_node = list(start)[0]
+            del references["start"]
 
     print("digraph g1 {")
     print('\toverlap="scale";')  # Force twopi to scale the graph to avoid overlaps
     print(f'\troot="{root_node}";')
-    print(f"\t{root_node} [color=green, shape=circle];")
+    print(f"\t{root_node} [color=green, shape=circle]")
     for name, refs in references.items():
-        for ref in refs:
-            print(f"\t{name} -> {ref};")
+        if refs:  # Ignore empty sets
+            print(f"\t{name} -> {','.join(refs)};")
     print("}")
 
 

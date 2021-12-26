@@ -299,8 +299,4 @@ Importing Modules
    field; failure to provide the sentinel value can result in a memory fault.
    Returns ``0`` on success or ``-1`` if insufficient memory could be allocated to
    extend the internal table.  In the event of failure, no modules are added to the
-   internal table.  This must be called before :c:func:`Py_Initialize`.
-
-   If Python is initialized multiple times, :c:func:`PyImport_AppendInittab` or
-   :c:func:`PyImport_ExtendInittab` must be called before each Python
-   initialization.
+   internal table.  This should be called before :c:func:`Py_Initialize`.

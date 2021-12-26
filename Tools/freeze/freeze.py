@@ -93,7 +93,6 @@ import modulefinder
 import getopt
 import os
 import sys
-import sysconfig
 
 
 # Import the freeze-private modules
@@ -227,7 +226,7 @@ def main():
         extensions_c = 'frozen_extensions.c'
     if ishome:
         print("(Using Python source directory)")
-        configdir = exec_prefix
+        binlib = exec_prefix
         incldir = os.path.join(prefix, 'Include')
         config_h_dir = exec_prefix
         config_c_in = os.path.join(prefix, 'Modules', 'config.c.in')
@@ -236,21 +235,22 @@ def main():
         if win:
             frozendllmain_c = os.path.join(exec_prefix, 'Pc\\frozen_dllmain.c')
     else:
-        configdir = sysconfig.get_config_var('LIBPL')
+        binlib = os.path.join(exec_prefix,
+                              'lib', 'python%s' % version,
+                              'config-%s' % flagged_version)
         incldir = os.path.join(prefix, 'include', 'python%s' % flagged_version)
         config_h_dir = os.path.join(exec_prefix, 'include',
                                     'python%s' % flagged_version)
-        config_c_in = os.path.join(configdir, 'config.c.in')
-        frozenmain_c = os.path.join(configdir, 'frozenmain.c')
-        makefile_in = os.path.join(configdir, 'Makefile')
-        frozendllmain_c = os.path.join(configdir, 'frozen_dllmain.c')
-    libdir = sysconfig.get_config_var('LIBDIR')
+        config_c_in = os.path.join(binlib, 'config.c.in')
+        frozenmain_c = os.path.join(binlib, 'frozenmain.c')
+        makefile_in = os.path.join(binlib, 'Makefile')
+        frozendllmain_c = os.path.join(binlib, 'frozen_dllmain.c')
     supp_sources = []
     defines = []
     includes = ['-I' + incldir, '-I' + config_h_dir]
 
     # sanity check of directories and files
-    check_dirs = [prefix, exec_prefix, configdir, incldir]
+    check_dirs = [prefix, exec_prefix, binlib, incldir]
     if not win:
         # These are not directories on Windows.
         check_dirs = check_dirs + extensions
@@ -367,6 +367,12 @@ def main():
         else:
             mf.load_file(mod)
 
+    # Alias "importlib._bootstrap" to "_frozen_importlib" so that the
+    # import machinery can bootstrap.  Do the same for
+    # importlib._bootstrap_external.
+    mf.modules["_frozen_importlib"] = mf.modules["importlib._bootstrap"]
+    mf.modules["_frozen_importlib_external"] = mf.modules["importlib._bootstrap_external"]
+
     # Add the main script as either __main__, or the actual module name.
     if python_entry_is_main:
         mf.run_script(scriptfile)
@@ -451,7 +457,7 @@ def main():
 
     cflags = ['$(OPT)']
     cppflags = defines + includes
-    libs = [os.path.join(libdir, '$(LDLIBRARY)')]
+    libs = [os.path.join(binlib, '$(LDLIBRARY)')]
 
     somevars = {}
     if os.path.exists(makefile_in):

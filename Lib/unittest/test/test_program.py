@@ -6,7 +6,6 @@ import subprocess
 from test import support
 import unittest
 import unittest.test
-from .test_result import BufferedWriter
 
 
 class Test_TestProgram(unittest.TestCase):
@@ -58,20 +57,9 @@ class Test_TestProgram(unittest.TestCase):
 
     class FooBar(unittest.TestCase):
         def testPass(self):
-            pass
+            assert True
         def testFail(self):
-            raise AssertionError
-        def testError(self):
-            1/0
-        @unittest.skip('skipping')
-        def testSkipped(self):
-            raise AssertionError
-        @unittest.expectedFailure
-        def testExpectedFailure(self):
-            raise AssertionError
-        @unittest.expectedFailure
-        def testUnexpectedSuccess(self):
-            pass
+            assert False
 
     class FooBarLoader(unittest.TestLoader):
         """Test loader that returns a suite containing FooBar."""
@@ -116,52 +104,30 @@ class Test_TestProgram(unittest.TestCase):
                           program.testNames)
 
     def test_NonExit(self):
-        stream = BufferedWriter()
         program = unittest.main(exit=False,
                                 argv=["foobar"],
-                                testRunner=unittest.TextTestRunner(stream=stream),
+                                testRunner=unittest.TextTestRunner(stream=io.StringIO()),
                                 testLoader=self.FooBarLoader())
         self.assertTrue(hasattr(program, 'result'))
-        out = stream.getvalue()
-        self.assertIn('\nFAIL: testFail ', out)
-        self.assertIn('\nERROR: testError ', out)
-        self.assertIn('\nUNEXPECTED SUCCESS: testUnexpectedSuccess ', out)
-        expected = ('\n\nFAILED (failures=1, errors=1, skipped=1, '
-                    'expected failures=1, unexpected successes=1)\n')
-        self.assertTrue(out.endswith(expected))
+
 
     def test_Exit(self):
-        stream = BufferedWriter()
         self.assertRaises(
             SystemExit,
             unittest.main,
             argv=["foobar"],
-            testRunner=unittest.TextTestRunner(stream=stream),
+            testRunner=unittest.TextTestRunner(stream=io.StringIO()),
             exit=True,
             testLoader=self.FooBarLoader())
-        out = stream.getvalue()
-        self.assertIn('\nFAIL: testFail ', out)
-        self.assertIn('\nERROR: testError ', out)
-        self.assertIn('\nUNEXPECTED SUCCESS: testUnexpectedSuccess ', out)
-        expected = ('\n\nFAILED (failures=1, errors=1, skipped=1, '
-                    'expected failures=1, unexpected successes=1)\n')
-        self.assertTrue(out.endswith(expected))
+
 
     def test_ExitAsDefault(self):
-        stream = BufferedWriter()
         self.assertRaises(
             SystemExit,
             unittest.main,
             argv=["foobar"],
-            testRunner=unittest.TextTestRunner(stream=stream),
+            testRunner=unittest.TextTestRunner(stream=io.StringIO()),
             testLoader=self.FooBarLoader())
-        out = stream.getvalue()
-        self.assertIn('\nFAIL: testFail ', out)
-        self.assertIn('\nERROR: testError ', out)
-        self.assertIn('\nUNEXPECTED SUCCESS: testUnexpectedSuccess ', out)
-        expected = ('\n\nFAILED (failures=1, errors=1, skipped=1, '
-                    'expected failures=1, unexpected successes=1)\n')
-        self.assertTrue(out.endswith(expected))
 
 
 class InitialisableProgram(unittest.TestProgram):
@@ -460,14 +426,14 @@ class TestCommandLineArgs(unittest.TestCase):
             return stderr.decode()
 
         t = '_test_warnings'
-        self.assertIn('Ran 5 tests', run_unittest([t]))
-        self.assertIn('Ran 5 tests', run_unittest(['-k', 'TestWarnings', t]))
-        self.assertIn('Ran 5 tests', run_unittest(['discover', '-p', '*_test*', '-k', 'TestWarnings']))
-        self.assertIn('Ran 1 test ', run_unittest(['-k', 'f', t]))
-        self.assertIn('Ran 5 tests', run_unittest(['-k', 't', t]))
-        self.assertIn('Ran 2 tests', run_unittest(['-k', '*t', t]))
-        self.assertIn('Ran 5 tests', run_unittest(['-k', '*test_warnings.*Warning*', t]))
-        self.assertIn('Ran 1 test ', run_unittest(['-k', '*test_warnings.*warning*', t]))
+        self.assertIn('Ran 7 tests', run_unittest([t]))
+        self.assertIn('Ran 7 tests', run_unittest(['-k', 'TestWarnings', t]))
+        self.assertIn('Ran 7 tests', run_unittest(['discover', '-p', '*_test*', '-k', 'TestWarnings']))
+        self.assertIn('Ran 2 tests', run_unittest(['-k', 'f', t]))
+        self.assertIn('Ran 7 tests', run_unittest(['-k', 't', t]))
+        self.assertIn('Ran 3 tests', run_unittest(['-k', '*t', t]))
+        self.assertIn('Ran 7 tests', run_unittest(['-k', '*test_warnings.*Warning*', t]))
+        self.assertIn('Ran 1 test', run_unittest(['-k', '*test_warnings.*warning*', t]))
 
 
 if __name__ == '__main__':

@@ -152,11 +152,6 @@ def main():
     (options, args) = parser.parse_args()
     sys.argv[:] = args
 
-    # The script that we're profiling may chdir, so capture the absolute path
-    # to the output file at startup.
-    if options.outfile is not None:
-        options.outfile = os.path.abspath(options.outfile)
-
     if len(args) > 0:
         if options.module:
             code = "run_module(modname, run_name='__main__')"
@@ -175,12 +170,7 @@ def main():
                 '__package__': None,
                 '__cached__': None,
             }
-        try:
-            runctx(code, globs, None, options.outfile, options.sort)
-        except BrokenPipeError as exc:
-            # Prevent "Exception ignored" during interpreter shutdown.
-            sys.stdout = None
-            sys.exit(exc.errno)
+        runctx(code, globs, None, options.outfile, options.sort)
     else:
         parser.print_usage()
     return parser

@@ -30,39 +30,40 @@
 #include "prepare_protocol.h"
 
 
+/** the adapters registry **/
+
+static PyObject *psyco_adapters = NULL;
+
 /* pysqlite_microprotocols_init - initialize the adapters dictionary */
 
 int
-pysqlite_microprotocols_init(PyObject *module)
+pysqlite_microprotocols_init(PyObject *dict)
 {
     /* create adapters dictionary and put it in module namespace */
-    pysqlite_state *state = pysqlite_get_state(module);
-    state->psyco_adapters = PyDict_New();
-    if (state->psyco_adapters == NULL) {
+    if ((psyco_adapters = PyDict_New()) == NULL) {
         return -1;
     }
 
-    return PyModule_AddObjectRef(module, "adapters", state->psyco_adapters);
+    return PyDict_SetItemString(dict, "adapters", psyco_adapters);
 }
 
 
 /* pysqlite_microprotocols_add - add a reverse type-caster to the dictionary */
 
 int
-pysqlite_microprotocols_add(pysqlite_state *state, PyTypeObject *type,
-                            PyObject *proto, PyObject *cast)
+pysqlite_microprotocols_add(PyTypeObject *type, PyObject *proto, PyObject *cast)
 {
     PyObject* key;
     int rc;
 
-    assert(type != NULL);
-    assert(proto != NULL);
+    if (proto == NULL) proto = (PyObject*)&pysqlite_PrepareProtocolType;
+
     key = Py_BuildValue("(OO)", (PyObject*)type, proto);
     if (!key) {
         return -1;
     }
 
-    rc = PyDict_SetItem(state->psyco_adapters, key, cast);
+    rc = PyDict_SetItem(psyco_adapters, key, cast);
     Py_DECREF(key);
 
     return rc;
@@ -71,15 +72,14 @@ pysqlite_microprotocols_add(pysqlite_state *state, PyTypeObject *type,
 /* pysqlite_microprotocols_adapt - adapt an object to the built-in protocol */
 
 PyObject *
-pysqlite_microprotocols_adapt(pysqlite_state *state, PyObject *obj,
-                              PyObject *proto, PyObject *alt)
+pysqlite_microprotocols_adapt(PyObject *obj, PyObject *proto, PyObject *alt)
 {
     _Py_IDENTIFIER(__adapt__);
     _Py_IDENTIFIER(__conform__);
     PyObject *adapter, *key, *adapted;
 
     /* we don't check for exact type conformance as specified in PEP 246
-       because the PrepareProtocolType type is abstract and there is no
+       because the pysqlite_PrepareProtocolType type is abstract and there is no
        way to get a quotable object to be its instance */
 
     /* look for an adapter in the registry */
@@ -87,7 +87,7 @@ pysqlite_microprotocols_adapt(pysqlite_state *state, PyObject *obj,
     if (!key) {
         return NULL;
     }
-    adapter = PyDict_GetItemWithError(state->psyco_adapters, key);
+    adapter = PyDict_GetItemWithError(psyco_adapters, key);
     Py_DECREF(key);
     if (adapter) {
         Py_INCREF(adapter);
@@ -138,9 +138,22 @@ pysqlite_microprotocols_adapt(pysqlite_state *state, PyObject *obj,
     }
 
     if (alt) {
-        return Py_NewRef(alt);
+        Py_INCREF(alt);
+        return alt;
     }
     /* else set the right exception and return NULL */
-    PyErr_SetString(state->ProgrammingError, "can't adapt");
+    PyErr_SetString(pysqlite_ProgrammingError, "can't adapt");
     return NULL;
+}
+
+/** module-level functions **/
+
+PyObject *
+pysqlite_adapt(pysqlite_Cursor *self, PyObject *args)
+{
+    PyObject *obj, *alt = NULL;
+    PyObject *proto = (PyObject*)&pysqlite_PrepareProtocolType;
+
+    if (!PyArg_ParseTuple(args, "O|OO", &obj, &proto, &alt)) return NULL;
+    return pysqlite_microprotocols_adapt(obj, proto, alt);
 }

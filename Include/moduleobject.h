@@ -84,12 +84,6 @@ typedef struct PyModuleDef{
   freefunc m_free;
 } PyModuleDef;
 
-
-// Internal C API
-#ifdef Py_BUILD_CORE
-extern int _PyModule_IsExtension(PyObject *obj);
-#endif
-
 #ifdef __cplusplus
 }
 #endif

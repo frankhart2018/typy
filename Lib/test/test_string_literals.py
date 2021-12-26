@@ -33,6 +33,7 @@ import shutil
 import tempfile
 import unittest
 import warnings
+from test.support import use_old_parser
 
 
 TEMPLATE = r"""# coding: %s
@@ -167,7 +168,8 @@ class TestLiterals(unittest.TestCase):
             eval("b'''\n\\z'''")
         self.assertEqual(len(w), 1)
         self.assertEqual(w[0].filename, '<string>')
-        self.assertEqual(w[0].lineno, 1)
+        if use_old_parser():
+            self.assertEqual(w[0].lineno, 1)
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter('error', category=DeprecationWarning)
@@ -176,7 +178,8 @@ class TestLiterals(unittest.TestCase):
             exc = cm.exception
         self.assertEqual(w, [])
         self.assertEqual(exc.filename, '<string>')
-        self.assertEqual(exc.lineno, 1)
+        if use_old_parser():
+            self.assertEqual(exc.lineno, 1)
 
     def test_eval_bytes_raw(self):
         self.assertEqual(eval(""" br'x' """), b'x')

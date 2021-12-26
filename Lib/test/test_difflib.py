@@ -1,5 +1,5 @@
 import difflib
-from test.support import findfile
+from test.support import run_unittest, findfile
 import unittest
 import doctest
 import sys
@@ -241,7 +241,7 @@ class TestSFpatches(unittest.TestCase):
         #with open('test_difflib_expect.html','w') as fp:
         #    fp.write(actual)
 
-        with open(findfile('test_difflib_expect.html'), encoding="utf-8") as fp:
+        with open(findfile('test_difflib_expect.html')) as fp:
             self.assertEqual(actual, fp.read())
 
     def test_recursion_limit(self):
@@ -547,14 +547,12 @@ class TestFindLongest(unittest.TestCase):
         self.assertFalse(self.longer_match_exists(a, b, match.size))
 
 
-def setUpModule():
+def test_main():
     difflib.HtmlDiff._default_prefix = 0
-
-
-def load_tests(loader, tests, pattern):
-    tests.addTest(doctest.DocTestSuite(difflib))
-    return tests
-
+    Doctests = doctest.DocTestSuite(difflib)
+    run_unittest(
+        TestWithAscii, TestAutojunk, TestSFpatches, TestSFbugs,
+        TestOutputFormat, TestBytes, TestJunkAPIs, TestFindLongest, Doctests)
 
 if __name__ == '__main__':
-    unittest.main()
+    test_main()

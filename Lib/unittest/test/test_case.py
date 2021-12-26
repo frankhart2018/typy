@@ -8,7 +8,6 @@ import logging
 import warnings
 import weakref
 import inspect
-import types
 
 from copy import deepcopy
 from test import support
@@ -19,7 +18,7 @@ from unittest.test.support import (
     TestEquality, TestHashing, LoggingResult, LegacyLoggingResult,
     ResultWithNoStartTestRunStopTestRun
 )
-from test.support import captured_stderr, gc_collect
+from test.support import captured_stderr
 
 
 log_foo = logging.getLogger('foo')
@@ -197,8 +196,8 @@ class Test_TestCase(unittest.TestCase, TestEquality, TestHashing):
                 super(Foo, self).test()
                 raise RuntimeError('raised by Foo.test')
 
-        expected = ['startTest', 'setUp', 'test',
-                    'addError', 'tearDown', 'stopTest']
+        expected = ['startTest', 'setUp', 'test', 'tearDown',
+                    'addError', 'stopTest']
         Foo(events).run(result)
         self.assertEqual(events, expected)
 
@@ -216,7 +215,7 @@ class Test_TestCase(unittest.TestCase, TestEquality, TestHashing):
                 raise RuntimeError('raised by Foo.test')
 
         expected = ['startTestRun', 'startTest', 'setUp', 'test',
-                    'addError', 'tearDown', 'stopTest', 'stopTestRun']
+                    'tearDown', 'addError', 'stopTest', 'stopTestRun']
         Foo(events).run()
         self.assertEqual(events, expected)
 
@@ -236,8 +235,8 @@ class Test_TestCase(unittest.TestCase, TestEquality, TestHashing):
                 super(Foo, self).test()
                 self.fail('raised by Foo.test')
 
-        expected = ['startTest', 'setUp', 'test',
-                    'addFailure', 'tearDown', 'stopTest']
+        expected = ['startTest', 'setUp', 'test', 'tearDown',
+                    'addFailure', 'stopTest']
         Foo(events).run(result)
         self.assertEqual(events, expected)
 
@@ -252,7 +251,7 @@ class Test_TestCase(unittest.TestCase, TestEquality, TestHashing):
                 self.fail('raised by Foo.test')
 
         expected = ['startTestRun', 'startTest', 'setUp', 'test',
-                    'addFailure', 'tearDown', 'stopTest', 'stopTestRun']
+                    'tearDown', 'addFailure', 'stopTest', 'stopTestRun']
         events = []
         Foo(events).run()
         self.assertEqual(events, expected)
@@ -306,26 +305,6 @@ class Test_TestCase(unittest.TestCase, TestEquality, TestHashing):
 
         Foo('test').run()
 
-    def test_deprecation_of_return_val_from_test(self):
-        # Issue 41322 - deprecate return of value!=None from a test
-        class Foo(unittest.TestCase):
-            def test1(self):
-                return 1
-            def test2(self):
-                yield 1
-
-        with self.assertWarns(DeprecationWarning) as w:
-            Foo('test1').run()
-        self.assertIn('It is deprecated to return a value!=None', str(w.warnings[0].message))
-        self.assertIn('test1', str(w.warnings[0].message))
-        self.assertEqual(w.warnings[0].filename, __file__)
-
-        with self.assertWarns(DeprecationWarning) as w:
-            Foo('test2').run()
-        self.assertIn('It is deprecated to return a value!=None', str(w.warnings[0].message))
-        self.assertIn('test2', str(w.warnings[0].message))
-        self.assertEqual(w.warnings[0].filename, __file__)
-
     def _check_call_order__subtests(self, result, events, expected_events):
         class Foo(Test.LoggingTestCase):
             def test(self):
@@ -353,10 +332,10 @@ class Test_TestCase(unittest.TestCase, TestEquality, TestHashing):
     def test_run_call_order__subtests(self):
         events = []
         result = LoggingResult(events)
-        expected = ['startTest', 'setUp', 'test',
+        expected = ['startTest', 'setUp', 'test', 'tearDown',
                     'addSubTestFailure', 'addSubTestSuccess',
                     'addSubTestFailure', 'addSubTestFailure',
-                    'addSubTestSuccess', 'addError', 'tearDown', 'stopTest']
+                    'addSubTestSuccess', 'addError', 'stopTest']
         self._check_call_order__subtests(result, events, expected)
 
     def test_run_call_order__subtests_legacy(self):
@@ -364,8 +343,8 @@ class Test_TestCase(unittest.TestCase, TestEquality, TestHashing):
         # text execution stops after the first subtest failure.
         events = []
         result = LegacyLoggingResult(events)
-        expected = ['startTest', 'setUp', 'test',
-                    'addFailure', 'tearDown', 'stopTest']
+        expected = ['startTest', 'setUp', 'test', 'tearDown',
+                    'addFailure', 'stopTest']
         self._check_call_order__subtests(result, events, expected)
 
     def _check_call_order__subtests_success(self, result, events, expected_events):
@@ -386,9 +365,9 @@ class Test_TestCase(unittest.TestCase, TestEquality, TestHashing):
         result = LoggingResult(events)
         # The 6 subtest successes are individually recorded, in addition
         # to the whole test success.
-        expected = (['startTest', 'setUp', 'test']
+        expected = (['startTest', 'setUp', 'test', 'tearDown']
                     + 6 * ['addSubTestSuccess']
-                    + ['tearDown', 'addSuccess', 'stopTest'])
+                    + ['addSuccess', 'stopTest'])
         self._check_call_order__subtests_success(result, events, expected)
 
     def test_run_call_order__subtests_success_legacy(self):
@@ -413,8 +392,8 @@ class Test_TestCase(unittest.TestCase, TestEquality, TestHashing):
                     self.fail('failure')
                 self.fail('failure')
 
-        expected = ['startTest', 'setUp', 'test',
-                    'addSubTestFailure', 'tearDown', 'stopTest']
+        expected = ['startTest', 'setUp', 'test', 'tearDown',
+                    'addSubTestFailure', 'stopTest']
         Foo(events).run(result)
         self.assertEqual(events, expected)
 
@@ -440,7 +419,7 @@ class Test_TestCase(unittest.TestCase, TestEquality, TestHashing):
 
         result = unittest.TestResult()
         result.failfast = True
-        suite = unittest.TestLoader().loadTestsFromTestCase(Foo)
+        suite = unittest.makeSuite(Foo)
         suite.run(result)
 
         expected = ['a1', 'a2', 'b1']
@@ -631,8 +610,6 @@ class Test_TestCase(unittest.TestCase, TestEquality, TestHashing):
                  'Tests shortDescription() for a method with a longer '
                  'docstring.')
 
-    @unittest.skipIf(sys.flags.optimize >= 2,
-                     "Docstrings are omitted with -O2 and above")
     def testShortDescriptionWhitespaceTrimming(self):
         """
             Tests shortDescription() whitespace is trimmed, so that the first
@@ -697,6 +674,36 @@ class Test_TestCase(unittest.TestCase, TestEquality, TestHashing):
         self.assertRaises(self.failureException, self.assertNotIn, 1, [1, 2, 3])
         self.assertRaises(self.failureException, self.assertNotIn, 'cow',
                           animals)
+
+    def testAssertDictContainsSubset(self):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+
+            self.assertDictContainsSubset({}, {})
+            self.assertDictContainsSubset({}, {'a': 1})
+            self.assertDictContainsSubset({'a': 1}, {'a': 1})
+            self.assertDictContainsSubset({'a': 1}, {'a': 1, 'b': 2})
+            self.assertDictContainsSubset({'a': 1, 'b': 2}, {'a': 1, 'b': 2})
+
+            with self.assertRaises(self.failureException):
+                self.assertDictContainsSubset({1: "one"}, {})
+
+            with self.assertRaises(self.failureException):
+                self.assertDictContainsSubset({'a': 2}, {'a': 1})
+
+            with self.assertRaises(self.failureException):
+                self.assertDictContainsSubset({'c': 1}, {'a': 1})
+
+            with self.assertRaises(self.failureException):
+                self.assertDictContainsSubset({'a': 1, 'c': 1}, {'a': 1})
+
+            with self.assertRaises(self.failureException):
+                self.assertDictContainsSubset({'a': 1, 'c': 1}, {'a': 1})
+
+            one = ''.join(chr(i) for i in range(255))
+            # this used to cause a UnicodeDecodeError constructing the failure msg
+            with self.assertRaises(self.failureException):
+                self.assertDictContainsSubset({'foo': one}, {'foo': '\uFFFD'})
 
     def testAssertEqual(self):
         equal_pairs = [
@@ -1343,20 +1350,6 @@ test case
             pass
         self.assertRaises(TypeError, self.assertWarnsRegex, MyWarn, lambda: True)
 
-    def testAssertWarnsModifySysModules(self):
-        # bpo-29620: handle modified sys.modules during iteration
-        class Foo(types.ModuleType):
-            @property
-            def __warningregistry__(self):
-                sys.modules['@bar@'] = 'bar'
-
-        sys.modules['@foo@'] = Foo('foo')
-        try:
-            self.assertWarns(UserWarning, warnings.warn, 'expected')
-        finally:
-            del sys.modules['@foo@']
-            del sys.modules['@bar@']
-
     def testAssertRaisesRegexMismatch(self):
         def Stub():
             raise Exception('Unexpected')
@@ -1665,18 +1658,6 @@ test case
                 with self.assertLogs(level='WARNING'):
                     log_foo.info("1")
 
-    def testAssertLogsFailureLevelTooHigh_FilterInRootLogger(self):
-        # Failure due to level too high - message propagated to root
-        with self.assertNoStderr():
-            oldLevel = log_foo.level
-            log_foo.setLevel(logging.INFO)
-            try:
-                with self.assertRaises(self.failureException):
-                    with self.assertLogs(level='WARNING'):
-                        log_foo.info("1")
-            finally:
-                log_foo.setLevel(oldLevel)
-
     def testAssertLogsFailureMismatchingLogger(self):
         # Failure due to mismatching logger (and the logged message is
         # passed through)
@@ -1685,93 +1666,45 @@ test case
                 with self.assertLogs('foo'):
                     log_quux.error("1")
 
-    def testAssertLogsUnexpectedException(self):
-        # Check unexpected exception will go through.
-        with self.assertRaises(ZeroDivisionError):
-            with self.assertLogs():
-                raise ZeroDivisionError("Unexpected")
-
-    def testAssertNoLogsDefault(self):
-        with self.assertRaises(self.failureException) as cm:
-            with self.assertNoLogs():
-                log_foo.info("1")
-                log_foobar.debug("2")
-        self.assertEqual(
-            str(cm.exception),
-            "Unexpected logs found: ['INFO:foo:1']",
+    def testDeprecatedMethodNames(self):
+        """
+        Test that the deprecated methods raise a DeprecationWarning. See #9424.
+        """
+        old = (
+            (self.failIfEqual, (3, 5)),
+            (self.assertNotEquals, (3, 5)),
+            (self.failUnlessEqual, (3, 3)),
+            (self.assertEquals, (3, 3)),
+            (self.failUnlessAlmostEqual, (2.0, 2.0)),
+            (self.assertAlmostEquals, (2.0, 2.0)),
+            (self.failIfAlmostEqual, (3.0, 5.0)),
+            (self.assertNotAlmostEquals, (3.0, 5.0)),
+            (self.failUnless, (True,)),
+            (self.assert_, (True,)),
+            (self.failUnlessRaises, (TypeError, lambda _: 3.14 + 'spam')),
+            (self.failIf, (False,)),
+            (self.assertDictContainsSubset, (dict(a=1, b=2), dict(a=1, b=2, c=3))),
+            (self.assertRaisesRegexp, (KeyError, 'foo', lambda: {}['foo'])),
+            (self.assertRegexpMatches, ('bar', 'bar')),
         )
+        for meth, args in old:
+            with self.assertWarns(DeprecationWarning):
+                meth(*args)
 
-    def testAssertNoLogsFailureFoundLogs(self):
-        with self.assertRaises(self.failureException) as cm:
-            with self.assertNoLogs():
-                log_quux.error("1")
-                log_foo.error("foo")
-
-        self.assertEqual(
-            str(cm.exception),
-            "Unexpected logs found: ['ERROR:quux:1', 'ERROR:foo:foo']",
-        )
-
-    def testAssertNoLogsPerLogger(self):
-        with self.assertNoStderr():
-            with self.assertLogs(log_quux):
-                with self.assertNoLogs(logger=log_foo):
-                    log_quux.error("1")
-
-    def testAssertNoLogsFailurePerLogger(self):
-        # Failure due to unexpected logs for the given logger or its
-        # children.
-        with self.assertRaises(self.failureException) as cm:
-            with self.assertLogs(log_quux):
-                with self.assertNoLogs(logger=log_foo):
-                    log_quux.error("1")
-                    log_foobar.info("2")
-        self.assertEqual(
-            str(cm.exception),
-            "Unexpected logs found: ['INFO:foo.bar:2']",
-        )
-
-    def testAssertNoLogsPerLevel(self):
-        # Check per-level filtering
-        with self.assertNoStderr():
-            with self.assertNoLogs(level="ERROR"):
-                log_foo.info("foo")
-                log_quux.debug("1")
-
-    def testAssertNoLogsFailurePerLevel(self):
-        # Failure due to unexpected logs at the specified level.
-        with self.assertRaises(self.failureException) as cm:
-            with self.assertNoLogs(level="DEBUG"):
-                log_foo.debug("foo")
-                log_quux.debug("1")
-        self.assertEqual(
-            str(cm.exception),
-            "Unexpected logs found: ['DEBUG:foo:foo', 'DEBUG:quux:1']",
-        )
-
-    def testAssertNoLogsUnexpectedException(self):
-        # Check unexpected exception will go through.
-        with self.assertRaises(ZeroDivisionError):
-            with self.assertNoLogs():
-                raise ZeroDivisionError("Unexpected")
-
-    def testAssertNoLogsYieldsNone(self):
-        with self.assertNoLogs() as value:
-            pass
-        self.assertIsNone(value)
-
-    def testDeprecatedFailMethods(self):
-        """Test that the deprecated fail* methods get removed in 3.11"""
+    # disable this test for now. When the version where the fail* methods will
+    # be removed is decided, re-enable it and update the version
+    def _testDeprecatedFailMethods(self):
+        """Test that the deprecated fail* methods get removed in 3.x"""
+        if sys.version_info[:2] < (3, 3):
+            return
         deprecated_names = [
             'failIfEqual', 'failUnlessEqual', 'failUnlessAlmostEqual',
             'failIfAlmostEqual', 'failUnless', 'failUnlessRaises', 'failIf',
-            'assertNotEquals', 'assertEquals', 'assertAlmostEquals',
-            'assertNotAlmostEquals', 'assert_', 'assertDictContainsSubset',
-            'assertRaisesRegexp', 'assertRegexpMatches'
+            'assertDictContainsSubset',
         ]
         for deprecated_name in deprecated_names:
             with self.assertRaises(AttributeError):
-                getattr(self, deprecated_name)
+                getattr(self, deprecated_name)  # remove these in 3.x
 
     def testDeepcopy(self):
         # Issue: 5660
@@ -1912,7 +1845,6 @@ test case
         for method_name in ('test1', 'test2'):
             testcase = TestCase(method_name)
             testcase.run()
-            gc_collect()  # For PyPy or other GCs.
             self.assertEqual(MyException.ninstance, 0)
 
 

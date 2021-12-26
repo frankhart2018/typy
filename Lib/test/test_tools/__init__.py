@@ -4,7 +4,6 @@ import importlib
 import os.path
 import unittest
 from test import support
-from test.support import import_helper
 
 basepath = os.path.normpath(
         os.path.dirname(                 # <src/install dir>
@@ -27,11 +26,11 @@ def skip_if_missing(tool=None):
 @contextlib.contextmanager
 def imports_under_tool(name, *subdirs):
     tooldir = os.path.join(toolsdir, name, *subdirs)
-    with import_helper.DirsOnSysPath(tooldir) as cm:
+    with support.DirsOnSysPath(tooldir) as cm:
         yield cm
 
 def import_tool(toolname):
-    with import_helper.DirsOnSysPath(scriptsdir):
+    with support.DirsOnSysPath(scriptsdir):
         return importlib.import_module(toolname)
 
 def load_tests(*args):

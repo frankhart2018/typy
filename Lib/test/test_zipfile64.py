@@ -17,7 +17,6 @@ import sys
 
 from tempfile import TemporaryFile
 
-from test.support import os_helper
 from test.support import TESTFN, requires_zlib
 
 TESTFN2 = TESTFN + "2"
@@ -139,8 +138,8 @@ class OtherTests(unittest.TestCase):
                 self.assertEqual(content, "%d" % (i**3 % 57))
 
     def tearDown(self):
-        os_helper.unlink(TESTFN)
-        os_helper.unlink(TESTFN2)
+        support.unlink(TESTFN)
+        support.unlink(TESTFN2)
 
 if __name__ == "__main__":
     unittest.main()

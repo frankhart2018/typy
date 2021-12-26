@@ -83,7 +83,7 @@ Following is a result of running the code:
    $ python3 prog.py --help
    usage: prog.py [-h]
 
-   options:
+   optional arguments:
      -h, --help  show this help message and exit
    $ python3 prog.py --verbose
    usage: prog.py [-h]
@@ -130,7 +130,7 @@ And running the code:
    positional arguments:
      echo
 
-   options:
+   optional arguments:
      -h, --help  show this help message and exit
    $ python3 prog.py foo
    foo
@@ -172,7 +172,7 @@ And we get:
    positional arguments:
      echo        echo the string you use here
 
-   options:
+   optional arguments:
      -h, --help  show this help message and exit
 
 Now, how about doing something even more useful::
@@ -241,7 +241,7 @@ And the output:
    $ python3 prog.py --help
    usage: prog.py [-h] [--verbosity VERBOSITY]
 
-   options:
+   optional arguments:
      -h, --help            show this help message and exit
      --verbosity VERBOSITY
                            increase output verbosity
@@ -289,7 +289,7 @@ And the output:
    $ python3 prog.py --help
    usage: prog.py [-h] [--verbose]
 
-   options:
+   optional arguments:
      -h, --help  show this help message and exit
      --verbose   increase output verbosity
 
@@ -332,7 +332,7 @@ And here goes:
    $ python3 prog.py --help
    usage: prog.py [-h] [-v]
 
-   options:
+   optional arguments:
      -h, --help     show this help message and exit
      -v, --verbose  increase output verbosity
 
@@ -353,7 +353,7 @@ Our program keeps growing in complexity::
    args = parser.parse_args()
    answer = args.square**2
    if args.verbose:
-       print(f"the square of {args.square} equals {answer}")
+       print("the square of {} equals {}".format(args.square, answer))
    else:
        print(answer)
 
@@ -387,9 +387,9 @@ multiple verbosity values, and actually get to use them::
    args = parser.parse_args()
    answer = args.square**2
    if args.verbosity == 2:
-       print(f"the square of {args.square} equals {answer}")
+       print("the square of {} equals {}".format(args.square, answer))
    elif args.verbosity == 1:
-       print(f"{args.square}^2 == {answer}")
+       print("{}^2 == {}".format(args.square, answer))
    else:
        print(answer)
 
@@ -421,9 +421,9 @@ Let's fix it by restricting the values the ``--verbosity`` option can accept::
    args = parser.parse_args()
    answer = args.square**2
    if args.verbosity == 2:
-       print(f"the square of {args.square} equals {answer}")
+       print("the square of {} equals {}".format(args.square, answer))
    elif args.verbosity == 1:
-       print(f"{args.square}^2 == {answer}")
+       print("{}^2 == {}".format(args.square, answer))
    else:
        print(answer)
 
@@ -440,7 +440,7 @@ And the output:
    positional arguments:
      square                display a square of a given number
 
-   options:
+   optional arguments:
      -h, --help            show this help message and exit
      -v {0,1,2}, --verbosity {0,1,2}
                            increase output verbosity
@@ -461,15 +461,14 @@ verbosity argument (check the output of ``python --help``)::
    args = parser.parse_args()
    answer = args.square**2
    if args.verbosity == 2:
-       print(f"the square of {args.square} equals {answer}")
+       print("the square of {} equals {}".format(args.square, answer))
    elif args.verbosity == 1:
-       print(f"{args.square}^2 == {answer}")
+       print("{}^2 == {}".format(args.square, answer))
    else:
        print(answer)
 
 We have introduced another action, "count",
-to count the number of occurrences of specific options.
-
+to count the number of occurrences of a specific optional arguments:
 
 .. code-block:: shell-session
 
@@ -490,7 +489,7 @@ to count the number of occurrences of specific options.
    positional arguments:
      square           display a square of a given number
 
-   options:
+   optional arguments:
      -h, --help       show this help message and exit
      -v, --verbosity  increase output verbosity
    $ python3 prog.py 4 -vvv
@@ -530,9 +529,9 @@ Let's fix::
 
    # bugfix: replace == with >=
    if args.verbosity >= 2:
-       print(f"the square of {args.square} equals {answer}")
+       print("the square of {} equals {}".format(args.square, answer))
    elif args.verbosity >= 1:
-       print(f"{args.square}^2 == {answer}")
+       print("{}^2 == {}".format(args.square, answer))
    else:
        print(answer)
 
@@ -567,9 +566,9 @@ Let's fix that bug::
    args = parser.parse_args()
    answer = args.square**2
    if args.verbosity >= 2:
-       print(f"the square of {args.square} equals {answer}")
+       print("the square of {} equals {}".format(args.square, answer))
    elif args.verbosity >= 1:
-       print(f"{args.square}^2 == {answer}")
+       print("{}^2 == {}".format(args.square, answer))
    else:
        print(answer)
 
@@ -607,9 +606,9 @@ not just squares::
    args = parser.parse_args()
    answer = args.x**args.y
    if args.verbosity >= 2:
-       print(f"{args.x} to the power {args.y} equals {answer}")
+       print("{} to the power {} equals {}".format(args.x, args.y, answer))
    elif args.verbosity >= 1:
-       print(f"{args.x}^{args.y} == {answer}")
+       print("{}^{} == {}".format(args.x, args.y, answer))
    else:
        print(answer)
 
@@ -627,7 +626,7 @@ Output:
      x                the base
      y                the exponent
 
-   options:
+   optional arguments:
      -h, --help       show this help message and exit
      -v, --verbosity
    $ python3 prog.py 4 2 -v
@@ -646,9 +645,9 @@ to display *more* text instead::
    args = parser.parse_args()
    answer = args.x**args.y
    if args.verbosity >= 2:
-       print(f"Running '{__file__}'")
+       print("Running '{}'".format(__file__))
    if args.verbosity >= 1:
-       print(f"{args.x}^{args.y} == ", end="")
+       print("{}^{} == ".format(args.x, args.y), end="")
    print(answer)
 
 Output:
@@ -689,9 +688,9 @@ which will be the opposite of the ``--verbose`` one::
    if args.quiet:
        print(answer)
    elif args.verbose:
-       print(f"{args.x} to the power {args.y} equals {answer}")
+       print("{} to the power {} equals {}".format(args.x, args.y, answer))
    else:
-       print(f"{args.x}^{args.y} == {answer}")
+       print("{}^{} == {}".format(args.x, args.y, answer))
 
 Our program is now simpler, and we've lost some functionality for the sake of
 demonstration. Anyways, here's the output:
@@ -751,7 +750,7 @@ but not both at the same time:
      x              the base
      y              the exponent
 
-   options:
+   optional arguments:
      -h, --help     show this help message and exit
      -v, --verbose
      -q, --quiet

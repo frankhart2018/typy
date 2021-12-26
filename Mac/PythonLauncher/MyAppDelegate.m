@@ -22,7 +22,7 @@
 {
     // Test that the file mappings are correct
     [self testFileTypeBinding];
-    // If we were opened because of a file drag or double-click
+    // If we were opened because of a file drag or doubleclick
     // we've set initial_action_done in shouldShowUI
     // Otherwise we open a preferences dialog.
     if (!initial_action_done) {

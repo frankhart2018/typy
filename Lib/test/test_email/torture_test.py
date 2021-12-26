@@ -12,6 +12,7 @@ import unittest
 from io import StringIO
 
 from test.test_email import TestEmailBase
+from test.support import run_unittest
 
 import email
 from email import __file__ as testfile
@@ -23,11 +24,10 @@ def openfile(filename):
     return open(path, 'r')
 
 # Prevent this test from running in the Python distro
-def setUpModule():
-    try:
-        openfile('crispin-torture.txt')
-    except OSError:
-        raise unittest.SkipTest
+try:
+    openfile('crispin-torture.txt')
+except OSError:
+    raise unittest.SkipTest
 
 
 
@@ -117,11 +117,17 @@ def _testclasses():
     return [getattr(mod, name) for name in dir(mod) if name.startswith('Test')]
 
 
-def load_tests(loader, tests, pattern):
-    suite = loader.suiteClass()
+def suite():
+    suite = unittest.TestSuite()
     for testclass in _testclasses():
-        suite.addTest(loader.loadTestsFromTestCase(testclass))
+        suite.addTest(unittest.makeSuite(testclass))
     return suite
 
-if __name__ == "__main__":
-    unittest.main()
+
+def test_main():
+    for testclass in _testclasses():
+        run_unittest(testclass)
+
+
+if __name__ == '__main__':
+    unittest.main(defaultTest='suite')

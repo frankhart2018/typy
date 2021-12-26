@@ -24,31 +24,43 @@
 #include "module.h"
 #include "connection.h"
 
-int
-pysqlite_step(sqlite3_stmt *statement)
+int pysqlite_step(sqlite3_stmt* statement, pysqlite_Connection* connection)
 {
     int rc;
 
-    Py_BEGIN_ALLOW_THREADS
-    rc = sqlite3_step(statement);
-    Py_END_ALLOW_THREADS
+    if (statement == NULL) {
+        /* this is a workaround for SQLite 3.5 and later. it now apparently
+         * returns NULL for "no-operation" statements */
+        rc = SQLITE_OK;
+    } else {
+        Py_BEGIN_ALLOW_THREADS
+        rc = sqlite3_step(statement);
+        Py_END_ALLOW_THREADS
+    }
 
     return rc;
 }
 
-// Returns non-NULL if a new exception should be raised
-static PyObject *
-get_exception_class(pysqlite_state *state, int errorcode)
+/**
+ * Checks the SQLite error code and sets the appropriate DB-API exception.
+ * Returns the error code (0 means no error occurred).
+ */
+int _pysqlite_seterror(sqlite3* db, sqlite3_stmt* st)
 {
-    switch (errorcode) {
+    int errorcode = sqlite3_errcode(db);
+
+    switch (errorcode)
+    {
         case SQLITE_OK:
             PyErr_Clear();
-            return NULL;
+            break;
         case SQLITE_INTERNAL:
         case SQLITE_NOTFOUND:
-            return state->InternalError;
+            PyErr_SetString(pysqlite_InternalError, sqlite3_errmsg(db));
+            break;
         case SQLITE_NOMEM:
-            return PyErr_NoMemory();
+            (void)PyErr_NoMemory();
+            break;
         case SQLITE_ERROR:
         case SQLITE_PERM:
         case SQLITE_ABORT:
@@ -62,89 +74,27 @@ get_exception_class(pysqlite_state *state, int errorcode)
         case SQLITE_PROTOCOL:
         case SQLITE_EMPTY:
         case SQLITE_SCHEMA:
-            return state->OperationalError;
+            PyErr_SetString(pysqlite_OperationalError, sqlite3_errmsg(db));
+            break;
         case SQLITE_CORRUPT:
-            return state->DatabaseError;
+            PyErr_SetString(pysqlite_DatabaseError, sqlite3_errmsg(db));
+            break;
         case SQLITE_TOOBIG:
-            return state->DataError;
+            PyErr_SetString(pysqlite_DataError, sqlite3_errmsg(db));
+            break;
         case SQLITE_CONSTRAINT:
         case SQLITE_MISMATCH:
-            return state->IntegrityError;
+            PyErr_SetString(pysqlite_IntegrityError, sqlite3_errmsg(db));
+            break;
         case SQLITE_MISUSE:
-            return state->ProgrammingError;
-        case SQLITE_RANGE:
-            return state->InterfaceError;
+            PyErr_SetString(pysqlite_ProgrammingError, sqlite3_errmsg(db));
+            break;
         default:
-            return state->DatabaseError;
-    }
-}
-
-static void
-raise_exception(PyObject *type, int errcode, const char *errmsg)
-{
-    PyObject *exc = NULL;
-    PyObject *args[] = { PyUnicode_FromString(errmsg), };
-    if (args[0] == NULL) {
-        goto exit;
-    }
-    exc = PyObject_Vectorcall(type, args, 1, NULL);
-    Py_DECREF(args[0]);
-    if (exc == NULL) {
-        goto exit;
+            PyErr_SetString(pysqlite_DatabaseError, sqlite3_errmsg(db));
+            break;
     }
 
-    PyObject *code = PyLong_FromLong(errcode);
-    if (code == NULL) {
-        goto exit;
-    }
-    int rc = PyObject_SetAttrString(exc, "sqlite_errorcode", code);
-    Py_DECREF(code);
-    if (rc < 0) {
-        goto exit;
-    }
-
-    const char *error_name = pysqlite_error_name(errcode);
-    PyObject *name;
-    if (error_name) {
-        name = PyUnicode_FromString(error_name);
-    }
-    else {
-        name = PyUnicode_InternFromString("unknown");
-    }
-    if (name == NULL) {
-        goto exit;
-    }
-    rc = PyObject_SetAttrString(exc, "sqlite_errorname", name);
-    Py_DECREF(name);
-    if (rc < 0) {
-        goto exit;
-    }
-
-    PyErr_SetObject(type, exc);
-
-exit:
-    Py_XDECREF(exc);
-}
-
-/**
- * Checks the SQLite error code and sets the appropriate DB-API exception.
- * Returns the error code (0 means no error occurred).
- */
-int
-_pysqlite_seterror(pysqlite_state *state, sqlite3 *db)
-{
-    int errorcode = sqlite3_errcode(db);
-    PyObject *exc_class = get_exception_class(state, errorcode);
-    if (exc_class == NULL) {
-        // No new exception need be raised; just pass the error code
-        return errorcode;
-    }
-
-    /* Create and set the exception. */
-    int extended_errcode = sqlite3_extended_errcode(db);
-    const char *errmsg = sqlite3_errmsg(db);
-    raise_exception(exc_class, extended_errcode, errmsg);
-    return extended_errcode;
+    return errorcode;
 }
 
 #ifdef WORDS_BIGENDIAN

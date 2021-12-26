@@ -1,15 +1,10 @@
 
 /* interpreters module */
 /* low-level access to interpreter primitives */
-#ifndef Py_BUILD_CORE_BUILTIN
-#  define Py_BUILD_CORE_MODULE 1
-#endif
 
 #include "Python.h"
 #include "frameobject.h"
-#include "pycore_frame.h"
-#include "pycore_pystate.h"       // _PyThreadState_GET()
-#include "pycore_interpreteridobject.h"
+#include "interpreteridobject.h"
 
 
 static char *
@@ -1785,12 +1780,7 @@ static PyTypeObject ChannelIDtype = {
     0,                              /* tp_getattro */
     0,                              /* tp_setattro */
     0,                              /* tp_as_buffer */
-    // Use Py_TPFLAGS_DISALLOW_INSTANTIATION so the type cannot be instantiated
-    // from Python code.  We do this because there is a strong relationship
-    // between channel IDs and the channel lifecycle, so this limitation avoids
-    // related complications. Use the _channel_id() function instead.
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE
-        | Py_TPFLAGS_DISALLOW_INSTANTIATION, /* tp_flags */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /* tp_flags */
     channelid_doc,                  /* tp_doc */
     0,                              /* tp_traverse */
     0,                              /* tp_clear */
@@ -1801,6 +1791,19 @@ static PyTypeObject ChannelIDtype = {
     0,                              /* tp_methods */
     0,                              /* tp_members */
     channelid_getsets,              /* tp_getset */
+    0,                              /* tp_base */
+    0,                              /* tp_dict */
+    0,                              /* tp_descr_get */
+    0,                              /* tp_descr_set */
+    0,                              /* tp_dictoffset */
+    0,                              /* tp_init */
+    0,                              /* tp_alloc */
+    // Note that we do not set tp_new to channelid_new.  Instead we
+    // set it to NULL, meaning it cannot be instantiated from Python
+    // code.  We do this because there is a strong relationship between
+    // channel IDs and the channel lifecycle, so this limitation avoids
+    // related complications.
+    NULL,                           /* tp_new */
 };
 
 
@@ -1839,12 +1842,13 @@ _is_running(PyInterpreterState *interp)
     }
 
     assert(!PyErr_Occurred());
-    InterpreterFrame *frame = tstate->cframe->current_frame;
+    PyFrameObject *frame = PyThreadState_GetFrame(tstate);
     if (frame == NULL) {
         return 0;
     }
 
-    int executing = _PyFrame_IsExecuting(frame);
+    int executing = (int)(frame->f_executing);
+    Py_DECREF(frame);
 
     return executing;
 }
@@ -2021,7 +2025,7 @@ interp_create(PyObject *self, PyObject *args, PyObject *kwds)
     }
 
     // Create and initialize the new interpreter.
-    PyThreadState *save_tstate = _PyThreadState_GET();
+    PyThreadState *save_tstate = PyThreadState_Swap(NULL);
     // XXX Possible GILState issues?
     PyThreadState *tstate = _Py_NewInterpreter(isolated);
     PyThreadState_Swap(save_tstate);

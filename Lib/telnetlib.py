@@ -489,6 +489,7 @@ class Telnet:
         except EOFError: # raised by self.rawq_getchar()
             self.iacseq = b'' # Reset on EOF
             self.sb = 0
+            pass
         self.cookedq = self.cookedq + buf[0]
         self.sbdataq = self.sbdataq + buf[1]
 

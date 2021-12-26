@@ -1,8 +1,8 @@
 # Simple test suite for http/cookies.py
 
 import copy
+from test.support import run_unittest, run_doctest
 import unittest
-import doctest
 from http import cookies
 import pickle
 
@@ -479,11 +479,9 @@ class MorselTests(unittest.TestCase):
                 r'Set-Cookie: key=coded_val; '
                 r'expires=\w+, \d+ \w+ \d+ \d+:\d+:\d+ \w+')
 
-
-def load_tests(loader, tests, pattern):
-    tests.addTest(doctest.DocTestSuite(cookies))
-    return tests
-
+def test_main():
+    run_unittest(CookieTests, MorselTests)
+    run_doctest(cookies)
 
 if __name__ == '__main__':
-    unittest.main()
+    test_main()

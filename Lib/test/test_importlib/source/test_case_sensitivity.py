@@ -7,9 +7,8 @@ importlib = util.import_importlib('importlib')
 machinery = util.import_importlib('importlib.machinery')
 
 import os
-from test.support import os_helper
+from test import support as test_support
 import unittest
-import warnings
 
 
 @util.case_insensitive_tests
@@ -43,7 +42,7 @@ class CaseSensitivityTest(util.CASEOKTestBase):
 
     @unittest.skipIf(sys.flags.ignore_environment, 'ignore_environment flag was set')
     def test_sensitive(self):
-        with os_helper.EnvironmentVarGuard() as env:
+        with test_support.EnvironmentVarGuard() as env:
             env.unset('PYTHONCASEOK')
             self.caseok_env_changed(should_exist=False)
             sensitive, insensitive = self.sensitivity_test()
@@ -53,7 +52,7 @@ class CaseSensitivityTest(util.CASEOKTestBase):
 
     @unittest.skipIf(sys.flags.ignore_environment, 'ignore_environment flag was set')
     def test_insensitive(self):
-        with os_helper.EnvironmentVarGuard() as env:
+        with test_support.EnvironmentVarGuard() as env:
             env.set('PYTHONCASEOK', '1')
             self.caseok_env_changed(should_exist=True)
             sensitive, insensitive = self.sensitivity_test()
@@ -65,9 +64,7 @@ class CaseSensitivityTest(util.CASEOKTestBase):
 
 class CaseSensitivityTestPEP302(CaseSensitivityTest):
     def find(self, finder):
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
-            return finder.find_module(self.name)
+        return finder.find_module(self.name)
 
 
 (Frozen_CaseSensitivityTestPEP302,

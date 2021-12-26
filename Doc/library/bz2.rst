@@ -25,6 +25,8 @@ The :mod:`bz2` module contains:
 * The :func:`compress` and :func:`decompress` functions for one-shot
   (de)compression.
 
+All of the classes in this module may safely be accessed from multiple threads.
+
 
 (De)compression of files
 ------------------------
@@ -137,11 +139,6 @@ The :mod:`bz2` module contains:
       opened.
 
       The *compresslevel* parameter became keyword-only.
-
-   .. versionchanged:: 3.10
-      This class is thread unsafe in the face of multiple simultaneous
-      readers or writers, just like its equivalent classes in :mod:`gzip` and
-      :mod:`lzma` have always been.
 
 
 Incremental (de)compression
@@ -269,6 +266,7 @@ Below are some examples of typical usage of the :mod:`bz2` module.
 Using :func:`compress` and :func:`decompress` to demonstrate round-trip compression:
 
     >>> import bz2
+
     >>> data = b"""\
     ... Donec rhoncus quis sapien sit amet molestie. Fusce scelerisque vel augue
     ... nec ullamcorper. Nam rutrum pretium placerat. Aliquam vel tristique lorem,
@@ -277,9 +275,11 @@ Using :func:`compress` and :func:`decompress` to demonstrate round-trip compress
     ... Aliquam pharetra lacus non risus vehicula rutrum. Maecenas aliquam leo
     ... felis. Pellentesque semper nunc sit amet nibh ullamcorper, ac elementum
     ... dolor luctus. Curabitur lacinia mi ornare consectetur vestibulum."""
+
     >>> c = bz2.compress(data)
     >>> len(data) / len(c)  # Data compression ratio
     1.513595166163142
+
     >>> d = bz2.decompress(c)
     >>> data == d  # Check equality to original object after round-trip
     True
@@ -287,6 +287,7 @@ Using :func:`compress` and :func:`decompress` to demonstrate round-trip compress
 Using :class:`BZ2Compressor` for incremental compression:
 
     >>> import bz2
+
     >>> def gen_data(chunks=10, chunksize=1000):
     ...     """Yield incremental blocks of chunksize bytes."""
     ...     for _ in range(chunks):
@@ -309,6 +310,7 @@ while ordered, repetitive data usually yields a high compression ratio.
 Writing and reading a bzip2-compressed file in binary mode:
 
     >>> import bz2
+
     >>> data = b"""\
     ... Donec rhoncus quis sapien sit amet molestie. Fusce scelerisque vel augue
     ... nec ullamcorper. Nam rutrum pretium placerat. Aliquam vel tristique lorem,
@@ -317,16 +319,14 @@ Writing and reading a bzip2-compressed file in binary mode:
     ... Aliquam pharetra lacus non risus vehicula rutrum. Maecenas aliquam leo
     ... felis. Pellentesque semper nunc sit amet nibh ullamcorper, ac elementum
     ... dolor luctus. Curabitur lacinia mi ornare consectetur vestibulum."""
+
     >>> with bz2.open("myfile.bz2", "wb") as f:
     ...     # Write compressed data to file
     ...     unused = f.write(data)
+
     >>> with bz2.open("myfile.bz2", "rb") as f:
     ...     # Decompress data from file
     ...     content = f.read()
+
     >>> content == data  # Check equality to original object after round-trip
     True
-
-.. testcleanup::
-
-   import os
-   os.remove("myfile.bz2")

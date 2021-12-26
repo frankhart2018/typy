@@ -53,12 +53,27 @@ msvcrt_locking(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if (!_PyArg_CheckPositional("locking", nargs, 3, 3)) {
         goto exit;
     }
+    if (PyFloat_Check(args[0])) {
+        PyErr_SetString(PyExc_TypeError,
+                        "integer argument expected, got float" );
+        goto exit;
+    }
     fd = _PyLong_AsInt(args[0]);
     if (fd == -1 && PyErr_Occurred()) {
         goto exit;
     }
+    if (PyFloat_Check(args[1])) {
+        PyErr_SetString(PyExc_TypeError,
+                        "integer argument expected, got float" );
+        goto exit;
+    }
     mode = _PyLong_AsInt(args[1]);
     if (mode == -1 && PyErr_Occurred()) {
+        goto exit;
+    }
+    if (PyFloat_Check(args[2])) {
+        PyErr_SetString(PyExc_TypeError,
+                        "integer argument expected, got float" );
         goto exit;
     }
     nbytes = PyLong_AsLong(args[2]);
@@ -99,8 +114,18 @@ msvcrt_setmode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if (!_PyArg_CheckPositional("setmode", nargs, 2, 2)) {
         goto exit;
     }
+    if (PyFloat_Check(args[0])) {
+        PyErr_SetString(PyExc_TypeError,
+                        "integer argument expected, got float" );
+        goto exit;
+    }
     fd = _PyLong_AsInt(args[0]);
     if (fd == -1 && PyErr_Occurred()) {
+        goto exit;
+    }
+    if (PyFloat_Check(args[1])) {
+        PyErr_SetString(PyExc_TypeError,
+                        "integer argument expected, got float" );
         goto exit;
     }
     flags = _PyLong_AsInt(args[1]);
@@ -176,6 +201,11 @@ msvcrt_get_osfhandle(PyObject *module, PyObject *arg)
     int fd;
     void *_return_value;
 
+    if (PyFloat_Check(arg)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "integer argument expected, got float" );
+        goto exit;
+    }
     fd = _PyLong_AsInt(arg);
     if (fd == -1 && PyErr_Occurred()) {
         goto exit;
@@ -531,8 +561,18 @@ msvcrt_CrtSetReportMode(PyObject *module, PyObject *const *args, Py_ssize_t narg
     if (!_PyArg_CheckPositional("CrtSetReportMode", nargs, 2, 2)) {
         goto exit;
     }
+    if (PyFloat_Check(args[0])) {
+        PyErr_SetString(PyExc_TypeError,
+                        "integer argument expected, got float" );
+        goto exit;
+    }
     type = _PyLong_AsInt(args[0]);
     if (type == -1 && PyErr_Occurred()) {
+        goto exit;
+    }
+    if (PyFloat_Check(args[1])) {
+        PyErr_SetString(PyExc_TypeError,
+                        "integer argument expected, got float" );
         goto exit;
     }
     mode = _PyLong_AsInt(args[1]);
@@ -574,6 +614,11 @@ msvcrt_set_error_mode(PyObject *module, PyObject *arg)
     int mode;
     long _return_value;
 
+    if (PyFloat_Check(arg)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "integer argument expected, got float" );
+        goto exit;
+    }
     mode = _PyLong_AsInt(arg);
     if (mode == -1 && PyErr_Occurred()) {
         goto exit;
@@ -589,24 +634,6 @@ exit:
 }
 
 #endif /* defined(_DEBUG) */
-
-PyDoc_STRVAR(msvcrt_GetErrorMode__doc__,
-"GetErrorMode($module, /)\n"
-"--\n"
-"\n"
-"Wrapper around GetErrorMode.");
-
-#define MSVCRT_GETERRORMODE_METHODDEF    \
-    {"GetErrorMode", (PyCFunction)msvcrt_GetErrorMode, METH_NOARGS, msvcrt_GetErrorMode__doc__},
-
-static PyObject *
-msvcrt_GetErrorMode_impl(PyObject *module);
-
-static PyObject *
-msvcrt_GetErrorMode(PyObject *module, PyObject *Py_UNUSED(ignored))
-{
-    return msvcrt_GetErrorMode_impl(module);
-}
 
 PyDoc_STRVAR(msvcrt_SetErrorMode__doc__,
 "SetErrorMode($module, mode, /)\n"
@@ -626,6 +653,11 @@ msvcrt_SetErrorMode(PyObject *module, PyObject *arg)
     PyObject *return_value = NULL;
     unsigned int mode;
 
+    if (PyFloat_Check(arg)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "integer argument expected, got float" );
+        goto exit;
+    }
     mode = (unsigned int)PyLong_AsUnsignedLongMask(arg);
     if (mode == (unsigned int)-1 && PyErr_Occurred()) {
         goto exit;
@@ -647,4 +679,4 @@ exit:
 #ifndef MSVCRT_SET_ERROR_MODE_METHODDEF
     #define MSVCRT_SET_ERROR_MODE_METHODDEF
 #endif /* !defined(MSVCRT_SET_ERROR_MODE_METHODDEF) */
-/*[clinic end generated code: output=20dfbc768edce7c0 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=7cc6ffaf64f268f7 input=a9049054013a1b77]*/

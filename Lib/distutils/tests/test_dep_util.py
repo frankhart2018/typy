@@ -74,7 +74,7 @@ class DepUtilTestCase(support.TempdirManager, unittest.TestCase):
 
 
 def test_suite():
-    return unittest.TestLoader().loadTestsFromTestCase(DepUtilTestCase)
+    return unittest.makeSuite(DepUtilTestCase)
 
 if __name__ == "__main__":
     run_unittest(test_suite())

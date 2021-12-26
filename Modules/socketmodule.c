@@ -45,7 +45,7 @@ Module interface:
 - socket.if_nameindex() -> list of tuples (if_index, if_name)
 - socket.if_nametoindex(name) -> corresponding interface index
 - socket.if_indextoname(index) -> corresponding interface name
-- an internet socket address is a pair (hostname, port)
+- an Internet socket address is a pair (hostname, port)
   where hostname can be anything recognized by gethostbyname()
   (including the dd.dd.dd.dd notation) and port is in host byte order
 - where a hostname is returned, the dd.dd.dd.dd notation is used
@@ -86,8 +86,6 @@ Local naming conventions:
 */
 
 #ifdef __APPLE__
-// Issue #35569: Expose RFC 3542 socket options.
-#define __APPLE_USE_RFC_3542 1
 #include <AvailabilityMacros.h>
 /* for getaddrinfo thread safety test on old versions of OS X */
 #ifndef MAC_OS_X_VERSION_10_5
@@ -153,6 +151,9 @@ getblocking() -- return True if socket is blocking, False if non-blocking\n\
 setsockopt(level, optname, value[, optlen]) -- set socket options\n\
 settimeout(None | float) -- set or clear the timeout\n\
 shutdown(how) -- shut down traffic in one or both directions\n\
+if_nameindex() -- return all network interface indices and names\n\
+if_nametoindex(name) -- return the corresponding interface index\n\
+if_indextoname(index) -- return the corresponding interface name\n\
 \n\
  [*] not available on all platforms!");
 
@@ -194,6 +195,43 @@ shutdown(how) -- shut down traffic in one or both directions\n\
 
 #if !defined(HAVE_GETHOSTBYNAME_R) && !defined(MS_WINDOWS)
 # define USE_GETHOSTBYNAME_LOCK
+#endif
+
+/* To use __FreeBSD_version, __OpenBSD__, and __NetBSD_Version__ */
+#ifdef HAVE_SYS_PARAM_H
+#include <sys/param.h>
+#endif
+/* On systems on which getaddrinfo() is believed to not be thread-safe,
+   (this includes the getaddrinfo emulation) protect access with a lock.
+
+   getaddrinfo is thread-safe on Mac OS X 10.5 and later. Originally it was
+   a mix of code including an unsafe implementation from an old BSD's
+   libresolv. In 10.5 Apple reimplemented it as a safe IPC call to the
+   mDNSResponder process. 10.5 is the first be UNIX '03 certified, which
+   includes the requirement that getaddrinfo be thread-safe. See issue #25924.
+
+   It's thread-safe in OpenBSD starting with 5.4, released Nov 2013:
+   http://www.openbsd.org/plus54.html
+
+   It's thread-safe in NetBSD starting with 4.0, released Dec 2007:
+
+http://cvsweb.netbsd.org/bsdweb.cgi/src/lib/libc/net/getaddrinfo.c.diff?r1=1.82&r2=1.83
+ */
+#if ((defined(__APPLE__) && \
+        MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_X_VERSION_10_5) || \
+    (defined(__FreeBSD__) && __FreeBSD_version+0 < 503000) || \
+    (defined(__OpenBSD__) && OpenBSD+0 < 201311) || \
+    (defined(__NetBSD__) && __NetBSD_Version__+0 < 400000000) || \
+    !defined(HAVE_GETADDRINFO))
+#define USE_GETADDRINFO_LOCK
+#endif
+
+#ifdef USE_GETADDRINFO_LOCK
+#define ACQUIRE_GETADDRINFO_LOCK PyThread_acquire_lock(netdb_lock, 1);
+#define RELEASE_GETADDRINFO_LOCK PyThread_release_lock(netdb_lock);
+#else
+#define ACQUIRE_GETADDRINFO_LOCK
+#define RELEASE_GETADDRINFO_LOCK
 #endif
 
 #if defined(__APPLE__) || defined(__CYGWIN__) || defined(__NetBSD__)
@@ -323,7 +361,7 @@ static FlagRuntimeInfo win_runtime_flags[] = {
     {14393, "TCP_FASTOPEN"}
 };
 
-static int
+static void
 remove_unusable_flags(PyObject *m)
 {
     PyObject *dict;
@@ -332,7 +370,7 @@ remove_unusable_flags(PyObject *m)
 
     dict = PyModule_GetDict(m);
     if (dict == NULL) {
-        return -1;
+        return;
     }
 
     /* set to Windows 10, except BuildNumber. */
@@ -358,19 +396,19 @@ remove_unusable_flags(PyObject *m)
             break;
         }
         else {
-            PyObject *flag_name = PyUnicode_FromString(win_runtime_flags[i].flag_name);
-            if (flag_name == NULL) {
-                return -1;
+            if (PyDict_GetItemString(
+                    dict,
+                    win_runtime_flags[i].flag_name) != NULL)
+            {
+                if (PyDict_DelItemString(
+                        dict,
+                        win_runtime_flags[i].flag_name))
+                {
+                    PyErr_Clear();
+                }
             }
-            PyObject *v = _PyDict_Pop(dict, flag_name, Py_None);
-            Py_DECREF(flag_name);
-            if (v == NULL) {
-                return -1;
-            }
-            Py_DECREF(v);
         }
     }
-    return 0;
 }
 
 #endif
@@ -435,12 +473,13 @@ remove_unusable_flags(PyObject *m)
 #endif
 
 #ifdef MS_WIN32
-#  undef EAFNOSUPPORT
-#  define EAFNOSUPPORT WSAEAFNOSUPPORT
+#undef EAFNOSUPPORT
+#define EAFNOSUPPORT WSAEAFNOSUPPORT
+#define snprintf _snprintf
 #endif
 
 #ifndef SOCKETCLOSE
-#  define SOCKETCLOSE close
+#define SOCKETCLOSE close
 #endif
 
 #if (defined(HAVE_BLUETOOTH_H) || defined(HAVE_BLUETOOTH_BLUETOOTH_H)) && !defined(__NetBSD__) && !defined(__DragonFly__)
@@ -513,6 +552,7 @@ remove_unusable_flags(PyObject *m)
    by this module (but not argument type or memory errors, etc.). */
 static PyObject *socket_herror;
 static PyObject *socket_gaierror;
+static PyObject *socket_timeout;
 
 /* A forward reference to the socket type object.
    The sock_type variable contains pointers to various functions,
@@ -760,7 +800,7 @@ internal_select(PySocketSockObject *s, int writing, _PyTime_t interval,
     Py_END_ALLOW_THREADS;
 #else
     if (interval >= 0) {
-        _PyTime_AsTimeval_clamp(interval, &tv, _PyTime_ROUND_CEILING);
+        _PyTime_AsTimeval_noraise(interval, &tv, _PyTime_ROUND_CEILING);
         tvp = &tv;
     }
     else
@@ -842,20 +882,18 @@ sock_call_ex(PySocketSockObject *s,
 
                 if (deadline_initialized) {
                     /* recompute the timeout */
-                    interval = _PyDeadline_Get(deadline);
+                    interval = deadline - _PyTime_GetMonotonicClock();
                 }
                 else {
                     deadline_initialized = 1;
-                    deadline = _PyDeadline_Init(timeout);
+                    deadline = _PyTime_GetMonotonicClock() + timeout;
                     interval = timeout;
                 }
 
-                if (interval >= 0) {
+                if (interval >= 0)
                     res = internal_select(s, writing, interval, connect);
-                }
-                else {
+                else
                     res = 1;
-                }
             }
             else {
                 res = internal_select(s, writing, timeout, connect);
@@ -886,7 +924,7 @@ sock_call_ex(PySocketSockObject *s,
                 if (err)
                     *err = SOCK_TIMEOUT_ERR;
                 else
-                    PyErr_SetString(PyExc_TimeoutError, "timed out");
+                    PyErr_SetString(socket_timeout, "timed out");
                 return -1;
             }
 
@@ -931,7 +969,7 @@ sock_call_ex(PySocketSockObject *s,
                reading, but the data then discarded by the OS because of a
                wrong checksum.
 
-               Loop on select() to recheck for socket readiness. */
+               Loop on select() to recheck for socket readyness. */
             continue;
         }
 
@@ -1023,7 +1061,7 @@ new_sockobject(SOCKET_T fd, int family, int type, int proto)
 
 /* Lock to allow python interpreter to continue, but only allow one
    thread to be in gethostbyname or getaddrinfo */
-#if defined(USE_GETHOSTBYNAME_LOCK)
+#if defined(USE_GETHOSTBYNAME_LOCK) || defined(USE_GETADDRINFO_LOCK)
 static PyThread_type_lock netdb_lock;
 #endif
 
@@ -1048,12 +1086,14 @@ setipaddr(const char *name, struct sockaddr *addr_ret, size_t addr_ret_size, int
         hints.ai_socktype = SOCK_DGRAM;         /*dummy*/
         hints.ai_flags = AI_PASSIVE;
         Py_BEGIN_ALLOW_THREADS
+        ACQUIRE_GETADDRINFO_LOCK
         error = getaddrinfo(NULL, "0", &hints, &res);
         Py_END_ALLOW_THREADS
         /* We assume that those thread-unsafe getaddrinfo() versions
            *are* safe regarding their return value, ie. that a
            subsequent call to getaddrinfo() does not destroy the
            outcome of the first call. */
+        RELEASE_GETADDRINFO_LOCK
         if (error) {
             set_gaierror(error);
             return -1;
@@ -1154,6 +1194,7 @@ setipaddr(const char *name, struct sockaddr *addr_ret, size_t addr_ret_size, int
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = af;
     Py_BEGIN_ALLOW_THREADS
+    ACQUIRE_GETADDRINFO_LOCK
     error = getaddrinfo(name, NULL, &hints, &res);
 #if defined(__digital__) && defined(__unix__)
     if (error == EAI_NONAME && af == AF_UNSPEC) {
@@ -1164,6 +1205,7 @@ setipaddr(const char *name, struct sockaddr *addr_ret, size_t addr_ret_size, int
     }
 #endif
     Py_END_ALLOW_THREADS
+    RELEASE_GETADDRINFO_LOCK  /* see comment in setipaddr() */
     if (error) {
         set_gaierror(error);
         return -1;
@@ -1517,10 +1559,10 @@ makesockaddr(SOCKET_T sockfd, struct sockaddr *addr, size_t addrlen, int proto)
 #ifdef CAN_J1939
           case CAN_J1939:
           {
-              return Py_BuildValue("O&KIB", PyUnicode_DecodeFSDefault,
+              return Py_BuildValue("O&KkB", PyUnicode_DecodeFSDefault,
                                           ifname,
-                                          (unsigned long long)a->can_addr.j1939.name,
-                                          (unsigned int)a->can_addr.j1939.pgn,
+                                          a->can_addr.j1939.name,
+                                          a->can_addr.j1939.pgn,
                                           a->can_addr.j1939.addr);
           }
 #endif /* CAN_J1939 */
@@ -2211,13 +2253,13 @@ getsockaddrarg(PySocketSockObject *s, PyObject *args,
             PyObject *interfaceName;
             struct ifreq ifr;
             Py_ssize_t len;
-            unsigned long long j1939_name; /* at least 64 bits */
-            unsigned int j1939_pgn; /* at least 32 bits */
+            uint64_t j1939_name;
+            uint32_t j1939_pgn;
             uint8_t j1939_addr;
 
             struct sockaddr_can *addr = &addrbuf->can;
 
-            if (!PyArg_ParseTuple(args, "O&KIB", PyUnicode_FSConverter,
+            if (!PyArg_ParseTuple(args, "O&KkB", PyUnicode_FSConverter,
                                               &interfaceName,
                                               &j1939_name,
                                               &j1939_pgn,
@@ -2245,8 +2287,8 @@ getsockaddrarg(PySocketSockObject *s, PyObject *args,
 
             addr->can_family = AF_CAN;
             addr->can_ifindex = ifr.ifr_ifindex;
-            addr->can_addr.j1939.name = (uint64_t)j1939_name;
-            addr->can_addr.j1939.pgn = (uint32_t)j1939_pgn;
+            addr->can_addr.j1939.name = j1939_name;
+            addr->can_addr.j1939.pgn = j1939_pgn;
             addr->can_addr.j1939.addr = j1939_addr;
 
             *len_ret = sizeof(*addr);
@@ -2880,7 +2922,7 @@ sock_settimeout(PySocketSockObject *s, PyObject *arg)
     /* Blocking mode for a Python socket object means that operations
        like :meth:`recv` or :meth:`sendall` will block the execution of
        the current thread until they are complete or aborted with a
-       `TimeoutError` or `socket.error` errors.  When timeout is `None`,
+       `socket.timeout` or `socket.error` errors.  When timeout is `None`,
        the underlying FD is in a blocking mode.  When timeout is a positive
        number, the FD is in a non-blocking mode, and socket ops are
        implemented with a `select()` call.
@@ -3366,9 +3408,8 @@ sock_getsockname(PySocketSockObject *s, PyObject *Py_UNUSED(ignored))
 PyDoc_STRVAR(getsockname_doc,
 "getsockname() -> address info\n\
 \n\
-Return the address of the local endpoint. The format depends on the\n\
-address family. For IPv4 sockets, the address info is a pair\n\
-(hostaddr, port).");
+Return the address of the local endpoint.  For IP sockets, the address\n\
+info is a pair (hostaddr, port).");
 
 
 #ifdef HAVE_GETPEERNAME         /* Cray APP doesn't have this :-( */
@@ -4180,7 +4221,7 @@ sock_sendall(PySocketSockObject *s, PyObject *args)
     Py_buffer pbuf;
     struct sock_send ctx;
     int has_timeout = (s->sock_timeout > 0);
-    _PyTime_t timeout = s->sock_timeout;
+    _PyTime_t interval = s->sock_timeout;
     _PyTime_t deadline = 0;
     int deadline_initialized = 0;
     PyObject *res = NULL;
@@ -4199,15 +4240,15 @@ sock_sendall(PySocketSockObject *s, PyObject *args)
         if (has_timeout) {
             if (deadline_initialized) {
                 /* recompute the timeout */
-                timeout = _PyDeadline_Get(deadline);
+                interval = deadline - _PyTime_GetMonotonicClock();
             }
             else {
                 deadline_initialized = 1;
-                deadline = _PyDeadline_Init(timeout);
+                deadline = _PyTime_GetMonotonicClock() + s->sock_timeout;
             }
 
-            if (timeout <= 0) {
-                PyErr_SetString(PyExc_TimeoutError, "timed out");
+            if (interval <= 0) {
+                PyErr_SetString(socket_timeout, "timed out");
                 goto done;
             }
         }
@@ -4215,7 +4256,7 @@ sock_sendall(PySocketSockObject *s, PyObject *args)
         ctx.buf = buf;
         ctx.len = len;
         ctx.flags = flags;
-        if (sock_call_ex(s, 1, sock_send_impl, &ctx, 0, NULL, timeout) < 0)
+        if (sock_call_ex(s, 1, sock_send_impl, &ctx, 0, NULL, interval) < 0)
             goto done;
         n = ctx.result;
         assert(n >= 0);
@@ -4788,7 +4829,6 @@ Set operation mode, IV and length of associated data for an AF_ALG\n\
 operation socket.");
 #endif
 
-#ifdef HAVE_SHUTDOWN
 /* s.shutdown(how) method */
 
 static PyObject *
@@ -4813,7 +4853,6 @@ PyDoc_STRVAR(shutdown_doc,
 \n\
 Shut down the reading side of the socket (flag == SHUT_RD), the writing side\n\
 of the socket (flag == SHUT_WR), or both ends (flag == SHUT_RDWR).");
-#endif
 
 #if defined(MS_WINDOWS) && defined(SIO_RCVALL)
 static PyObject*
@@ -4959,10 +4998,8 @@ static PyMethodDef sock_methods[] = {
                       gettimeout_doc},
     {"setsockopt",        (PyCFunction)sock_setsockopt, METH_VARARGS,
                       setsockopt_doc},
-#ifdef HAVE_SHUTDOWN
     {"shutdown",          (PyCFunction)sock_shutdown, METH_O,
                       shutdown_doc},
-#endif
 #ifdef CMSG_LEN
     {"recvmsg",           (PyCFunction)sock_recvmsg, METH_VARARGS,
                       recvmsg_doc},
@@ -5159,6 +5196,13 @@ sock_initobj(PyObject *self, PyObject *args, PyObject *kwds)
         else
 #endif
         {
+
+            if (PyFloat_Check(fdobj)) {
+                PyErr_SetString(PyExc_TypeError,
+                                "integer argument expected, got float");
+                return -1;
+            }
+
             fd = PyLong_AsSocket_t(fdobj);
             if (fd == (SOCKET_T)(-1) && PyErr_Occurred())
                 return -1;
@@ -5513,7 +5557,7 @@ sock_decode_hostname(const char *name)
 #ifdef MS_WINDOWS
     /* Issue #26227: gethostbyaddr() returns a string encoded
      * to the ANSI code page */
-    return PyUnicode_DecodeMBCS(name, strlen(name), "surrogatepass");
+    return PyUnicode_DecodeFSDefault(name);
 #else
     /* Decode from UTF-8 */
     return PyUnicode_FromString(name);
@@ -6107,10 +6151,13 @@ socket_ntohs(PyObject *self, PyObject *args)
         return NULL;
     }
     if (x > 0xffff) {
-        PyErr_SetString(PyExc_OverflowError,
-                        "ntohs: Python int too large to convert to C "
-                        "16-bit unsigned integer");
-        return NULL;
+        if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                         "ntohs: Python int too large to convert to C "
+                         "16-bit unsigned integer (The silent truncation "
+                         "is deprecated)",
+                         1)) {
+            return NULL;
+        }
     }
     return PyLong_FromUnsignedLong(ntohs((unsigned short)x));
 }
@@ -6118,7 +6165,12 @@ socket_ntohs(PyObject *self, PyObject *args)
 PyDoc_STRVAR(ntohs_doc,
 "ntohs(integer) -> integer\n\
 \n\
-Convert a 16-bit unsigned integer from network to host byte order.");
+Convert a 16-bit unsigned integer from network to host byte order.\n\
+Note that in case the received integer does not fit in 16-bit unsigned\n\
+integer, but does fit in a positive C int, it is silently truncated to\n\
+16-bit unsigned integer.\n\
+However, this silent truncation feature is deprecated, and will raise an\n\
+exception in future versions of Python.");
 
 
 static PyObject *
@@ -6170,10 +6222,13 @@ socket_htons(PyObject *self, PyObject *args)
         return NULL;
     }
     if (x > 0xffff) {
-        PyErr_SetString(PyExc_OverflowError,
-                        "htons: Python int too large to convert to C "
-                        "16-bit unsigned integer");
-        return NULL;
+        if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                         "htons: Python int too large to convert to C "
+                         "16-bit unsigned integer (The silent truncation "
+                         "is deprecated)",
+                         1)) {
+            return NULL;
+        }
     }
     return PyLong_FromUnsignedLong(htons((unsigned short)x));
 }
@@ -6181,7 +6236,12 @@ socket_htons(PyObject *self, PyObject *args)
 PyDoc_STRVAR(htons_doc,
 "htons(integer) -> integer\n\
 \n\
-Convert a 16-bit unsigned integer from host to network byte order.");
+Convert a 16-bit unsigned integer from host to network byte order.\n\
+Note that in case the received integer does not fit in 16-bit unsigned\n\
+integer, but does fit in a positive C int, it is silently truncated to\n\
+16-bit unsigned integer.\n\
+However, this silent truncation feature is deprecated, and will raise an\n\
+exception in future versions of Python.");
 
 
 static PyObject *
@@ -6510,8 +6570,10 @@ socket_getaddrinfo(PyObject *self, PyObject *args, PyObject* kwargs)
     hints.ai_protocol = protocol;
     hints.ai_flags = flags;
     Py_BEGIN_ALLOW_THREADS
+    ACQUIRE_GETADDRINFO_LOCK
     error = getaddrinfo(hptr, pptr, &hints, &res0);
     Py_END_ALLOW_THREADS
+    RELEASE_GETADDRINFO_LOCK  /* see comment in setipaddr() */
     if (error) {
         set_gaierror(error);
         goto err;
@@ -6604,8 +6666,10 @@ socket_getnameinfo(PyObject *self, PyObject *args)
     hints.ai_socktype = SOCK_DGRAM;     /* make numeric port happy */
     hints.ai_flags = AI_NUMERICHOST;    /* don't do any name resolution */
     Py_BEGIN_ALLOW_THREADS
+    ACQUIRE_GETADDRINFO_LOCK
     error = getaddrinfo(hostp, pbuf, &hints, &res);
     Py_END_ALLOW_THREADS
+    RELEASE_GETADDRINFO_LOCK  /* see comment in setipaddr() */
     if (error) {
         set_gaierror(error);
         goto fail;
@@ -7038,36 +7102,16 @@ os_init(void)
 }
 #endif
 
-static void
-sock_free_api(PySocketModule_APIObject *capi)
-{
-    Py_DECREF(capi->Sock_Type);
-    Py_DECREF(capi->error);
-    Py_DECREF(capi->timeout_error);
-    PyMem_Free(capi);
-}
 
-static void
-sock_destroy_api(PyObject *capsule)
+/* C API table - always add new things to the end for binary
+   compatibility. */
+static
+PySocketModule_APIObject PySocketModuleAPI =
 {
-    void *capi = PyCapsule_GetPointer(capsule, PySocket_CAPSULE_NAME);
-    sock_free_api(capi);
-}
-
-static PySocketModule_APIObject *
-sock_get_api(void)
-{
-    PySocketModule_APIObject *capi = PyMem_Malloc(sizeof(PySocketModule_APIObject));
-    if (capi == NULL) {
-        PyErr_NoMemory();
-        return NULL;
-    }
-
-    capi->Sock_Type = (PyTypeObject *)Py_NewRef(&sock_type);
-    capi->error = Py_NewRef(PyExc_OSError);
-    capi->timeout_error = Py_NewRef(PyExc_TimeoutError);
-    return capi;
-}
+    &sock_type,
+    NULL,
+    NULL
+};
 
 
 /* Initialize the _socket module.
@@ -7117,6 +7161,8 @@ PyInit__socket(void)
         return NULL;
 
     Py_INCREF(PyExc_OSError);
+    PySocketModuleAPI.error = PyExc_OSError;
+    Py_INCREF(PyExc_OSError);
     PyModule_AddObject(m, "error", PyExc_OSError);
     socket_herror = PyErr_NewException("socket.herror",
                                        PyExc_OSError, NULL);
@@ -7130,8 +7176,13 @@ PyInit__socket(void)
         return NULL;
     Py_INCREF(socket_gaierror);
     PyModule_AddObject(m, "gaierror", socket_gaierror);
-    PyModule_AddObjectRef(m, "timeout", PyExc_TimeoutError);
-
+    socket_timeout = PyErr_NewException("socket.timeout",
+                                        PyExc_OSError, NULL);
+    if (socket_timeout == NULL)
+        return NULL;
+    PySocketModuleAPI.timeout_error = socket_timeout;
+    Py_INCREF(socket_timeout);
+    PyModule_AddObject(m, "timeout", socket_timeout);
     Py_INCREF((PyObject *)&sock_type);
     if (PyModule_AddObject(m, "SocketType",
                            (PyObject *)&sock_type) != 0)
@@ -7150,24 +7201,10 @@ PyInit__socket(void)
     PyModule_AddObject(m, "has_ipv6", has_ipv6);
 
     /* Export C API */
-    PySocketModule_APIObject *capi = sock_get_api();
-    if (capi == NULL) {
-        Py_DECREF(m);
+    if (PyModule_AddObject(m, PySocket_CAPI_NAME,
+           PyCapsule_New(&PySocketModuleAPI, PySocket_CAPSULE_NAME, NULL)
+                             ) != 0)
         return NULL;
-    }
-    PyObject *capsule = PyCapsule_New(capi,
-                                      PySocket_CAPSULE_NAME,
-                                      sock_destroy_api);
-    if (capsule == NULL) {
-        sock_free_api(capi);
-        Py_DECREF(m);
-        return NULL;
-    }
-    if (PyModule_AddObject(m, PySocket_CAPI_NAME, capsule) < 0) {
-        Py_DECREF(capsule);
-        Py_DECREF(m);
-        return NULL;
-    }
 
     /* Address families (we only support AF_INET and AF_UNIX) */
 #ifdef AF_UNSPEC
@@ -7932,9 +7969,6 @@ PyInit__socket(void)
 #ifdef  IPPROTO_BIP
     PyModule_AddIntMacro(m, IPPROTO_BIP);
 #endif
-#ifdef  IPPROTO_MPTCP
-    PyModule_AddIntMacro(m, IPPROTO_MPTCP);
-#endif
 /**/
 #ifdef  IPPROTO_RAW
     PyModule_AddIntMacro(m, IPPROTO_RAW);
@@ -8028,9 +8062,6 @@ PyInit__socket(void)
 #endif
 #ifdef  IP_RECVRETOPTS
     PyModule_AddIntMacro(m, IP_RECVRETOPTS);
-#endif
-#ifdef  IP_RECVTOS
-    PyModule_AddIntMacro(m, IP_RECVTOS);
 #endif
 #ifdef  IP_RECVDSTADDR
     PyModule_AddIntMacro(m, IP_RECVDSTADDR);
@@ -8163,10 +8194,6 @@ PyInit__socket(void)
 #endif
 #ifdef  TCP_KEEPIDLE
     PyModule_AddIntMacro(m, TCP_KEEPIDLE);
-#endif
-    /* TCP_KEEPALIVE is OSX's TCP_KEEPIDLE equivalent */
-#if defined(__APPLE__) && defined(TCP_KEEPALIVE)
-    PyModule_AddIntMacro(m, TCP_KEEPALIVE);
 #endif
 #ifdef  TCP_KEEPINTVL
     PyModule_AddIntMacro(m, TCP_KEEPINTVL);
@@ -8402,16 +8429,13 @@ PyInit__socket(void)
 #endif /* _MSTCPIP_ */
 
     /* Initialize gethostbyname lock */
-#if defined(USE_GETHOSTBYNAME_LOCK)
+#if defined(USE_GETHOSTBYNAME_LOCK) || defined(USE_GETADDRINFO_LOCK)
     netdb_lock = PyThread_allocate_lock();
 #endif
 
 #ifdef MS_WINDOWS
     /* remove some flags on older version Windows during run-time */
-    if (remove_unusable_flags(m) < 0) {
-        Py_DECREF(m);
-        return NULL;
-    }
+    remove_unusable_flags(m);
 #endif
 
     return m;

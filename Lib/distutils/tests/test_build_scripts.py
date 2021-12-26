@@ -106,7 +106,7 @@ class BuildScriptsTestCase(support.TempdirManager,
             self.assertIn(name, built)
 
 def test_suite():
-    return unittest.TestLoader().loadTestsFromTestCase(BuildScriptsTestCase)
+    return unittest.makeSuite(BuildScriptsTestCase)
 
 if __name__ == "__main__":
     run_unittest(test_suite())

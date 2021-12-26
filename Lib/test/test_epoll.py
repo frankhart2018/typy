@@ -160,42 +160,44 @@ class TestEPoll(unittest.TestCase):
             self.fail("epoll on closed fd didn't raise EBADF")
 
     def test_control_and_wait(self):
-        # create the epoll object
         client, server = self._connected_pair()
+
         ep = select.epoll(16)
         ep.register(server.fileno(),
                     select.EPOLLIN | select.EPOLLOUT | select.EPOLLET)
         ep.register(client.fileno(),
                     select.EPOLLIN | select.EPOLLOUT | select.EPOLLET)
 
-        # EPOLLOUT
         now = time.monotonic()
         events = ep.poll(1, 4)
         then = time.monotonic()
         self.assertFalse(then - now > 0.1, then - now)
 
+        events.sort()
         expected = [(client.fileno(), select.EPOLLOUT),
                     (server.fileno(), select.EPOLLOUT)]
-        self.assertEqual(sorted(events), sorted(expected))
+        expected.sort()
 
-        # no event
-        events = ep.poll(timeout=0.1, maxevents=4)
+        self.assertEqual(events, expected)
+
+        events = ep.poll(timeout=2.1, maxevents=4)
         self.assertFalse(events)
 
-        # send: EPOLLIN and EPOLLOUT
-        client.sendall(b"Hello!")
-        server.sendall(b"world!!!")
+        client.send(b"Hello!")
+        server.send(b"world!!!")
 
         now = time.monotonic()
-        events = ep.poll(1.0, 4)
+        events = ep.poll(1, 4)
         then = time.monotonic()
         self.assertFalse(then - now > 0.01)
 
+        events.sort()
         expected = [(client.fileno(), select.EPOLLIN | select.EPOLLOUT),
                     (server.fileno(), select.EPOLLIN | select.EPOLLOUT)]
-        self.assertEqual(sorted(events), sorted(expected))
+        expected.sort()
 
-        # unregister, modify
+        self.assertEqual(events, expected)
+
         ep.unregister(client.fileno())
         ep.modify(server.fileno(), select.EPOLLOUT)
         now = time.monotonic()

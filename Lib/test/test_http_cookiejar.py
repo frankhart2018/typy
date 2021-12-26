@@ -3,8 +3,6 @@
 import os
 import re
 import test.support
-from test.support import os_helper
-from test.support import warnings_helper
 import time
 import unittest
 import urllib.request
@@ -330,12 +328,12 @@ def _interact(cookiejar, url, set_cookie_hdrs, hdr_name):
 
 class FileCookieJarTests(unittest.TestCase):
     def test_constructor_with_str(self):
-        filename = os_helper.TESTFN
+        filename = test.support.TESTFN
         c = LWPCookieJar(filename)
         self.assertEqual(c.filename, filename)
 
     def test_constructor_with_path_like(self):
-        filename = pathlib.Path(os_helper.TESTFN)
+        filename = pathlib.Path(test.support.TESTFN)
         c = LWPCookieJar(filename)
         self.assertEqual(c.filename, os.fspath(filename))
 
@@ -355,7 +353,7 @@ class FileCookieJarTests(unittest.TestCase):
 
     def test_lwp_valueless_cookie(self):
         # cookies with no value should be saved and loaded consistently
-        filename = os_helper.TESTFN
+        filename = test.support.TESTFN
         c = LWPCookieJar()
         interact_netscape(c, "http://www.acme.com/", 'boo')
         self.assertEqual(c._cookies["www.acme.com"]["/"]["boo"].value, None)
@@ -370,7 +368,7 @@ class FileCookieJarTests(unittest.TestCase):
 
     def test_bad_magic(self):
         # OSErrors (eg. file doesn't exist) are allowed to propagate
-        filename = os_helper.TESTFN
+        filename = test.support.TESTFN
         for cookiejar_class in LWPCookieJar, MozillaCookieJar:
             c = cookiejar_class()
             try:
@@ -477,7 +475,7 @@ class CookieTests(unittest.TestCase):
     def test_missing_value(self):
         # missing = sign in Cookie: header is regarded by Mozilla as a missing
         # name, and by http.cookiejar as a missing value
-        filename = os_helper.TESTFN
+        filename = test.support.TESTFN
         c = MozillaCookieJar(filename)
         interact_netscape(c, "http://www.acme.com/", 'eggs')
         interact_netscape(c, "http://www.acme.com/", '"spam"; path=/foo/')
@@ -601,7 +599,7 @@ class CookieTests(unittest.TestCase):
         c = CookieJar()
         future = time2netscape(time.time()+3600)
 
-        with warnings_helper.check_no_warnings(self):
+        with test.support.check_no_warnings(self):
             headers = [f"Set-Cookie: FOO=BAR; path=/; expires={future}"]
             req = urllib.request.Request("http://www.coyote.com/")
             res = FakeResponse(headers, "http://www.coyote.com/")
@@ -1715,7 +1713,7 @@ class LWPCookieTests(unittest.TestCase):
         self.assertEqual(len(c), 6)
 
         # save and restore
-        filename = os_helper.TESTFN
+        filename = test.support.TESTFN
 
         try:
             c.save(filename, ignore_discard=True)
@@ -1755,7 +1753,7 @@ class LWPCookieTests(unittest.TestCase):
         # Save / load Mozilla/Netscape cookie file format.
         year_plus_one = time.localtime()[0] + 1
 
-        filename = os_helper.TESTFN
+        filename = test.support.TESTFN
 
         c = MozillaCookieJar(filename,
                              policy=DefaultCookiePolicy(rfc2965=True))
@@ -1773,10 +1771,6 @@ class LWPCookieTests(unittest.TestCase):
         interact_netscape(c, "http://www.foo.com/",
                           "fooc=bar; Domain=www.foo.com; %s" % expires)
 
-        for cookie in c:
-            if cookie.name == "foo1":
-                cookie.set_nonstandard_attr("HTTPOnly", "")
-
         def save_and_restore(cj, ignore_discard):
             try:
                 cj.save(ignore_discard=ignore_discard)
@@ -1791,7 +1785,6 @@ class LWPCookieTests(unittest.TestCase):
         new_c = save_and_restore(c, True)
         self.assertEqual(len(new_c), 6)  # none discarded
         self.assertIn("name='foo1', value='bar'", repr(new_c))
-        self.assertIn("rest={'HTTPOnly': ''}", repr(new_c))
 
         new_c = save_and_restore(c, False)
         self.assertEqual(len(new_c), 4)  # 2 of them discarded on save
@@ -1920,5 +1913,14 @@ class LWPCookieTests(unittest.TestCase):
         self.assertNotEqual(counter["session_before"], 0)
 
 
+def test_main(verbose=None):
+    test.support.run_unittest(
+        DateTimeTests,
+        HeaderTests,
+        CookieTests,
+        FileCookieJarTests,
+        LWPCookieTests,
+        )
+
 if __name__ == "__main__":
-    unittest.main()
+    test_main(verbose=True)

@@ -148,7 +148,7 @@ class CygwinCCompilerTestCase(support.TempdirManager,
         self.assertRaises(ValueError, get_msvcr)
 
 def test_suite():
-    return unittest.TestLoader().loadTestsFromTestCase(CygwinCCompilerTestCase)
+    return unittest.makeSuite(CygwinCCompilerTestCase)
 
 if __name__ == '__main__':
     run_unittest(test_suite())

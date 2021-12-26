@@ -2,18 +2,12 @@
 
 /* much code borrowed from mathmodule.c */
 
-#ifndef Py_BUILD_CORE_BUILTIN
-#  define Py_BUILD_CORE_MODULE 1
-#endif
-
 #include "Python.h"
 #include "pycore_dtoa.h"
+#include "_math.h"
 /* we need DBL_MAX, DBL_MIN, DBL_EPSILON, DBL_MANT_DIG and FLT_RADIX from
    float.h.  We assume that FLT_RADIX is either 2 or 16. */
 #include <float.h>
-
-/* For _Py_log1p with workarounds for buggy handling of zeros. */
-#include "_math.h"
 
 #include "clinic/cmathmodule.c.h"
 /*[clinic input]
@@ -248,7 +242,7 @@ cmath_acos_impl(PyObject *module, Py_complex z)
         s2.imag = z.imag;
         s2 = cmath_sqrt_impl(module, s2);
         r.real = 2.*atan2(s1.real, s2.real);
-        r.imag = asinh(s2.real*s1.imag - s2.imag*s1.real);
+        r.imag = m_asinh(s2.real*s1.imag - s2.imag*s1.real);
     }
     errno = 0;
     return r;
@@ -282,7 +276,7 @@ cmath_acosh_impl(PyObject *module, Py_complex z)
         s2.real = z.real + 1.;
         s2.imag = z.imag;
         s2 = cmath_sqrt_impl(module, s2);
-        r.real = asinh(s1.real*s2.real + s1.imag*s2.imag);
+        r.real = m_asinh(s1.real*s2.real + s1.imag*s2.imag);
         r.imag = 2.*atan2(s1.imag, s2.real);
     }
     errno = 0;
@@ -342,7 +336,7 @@ cmath_asinh_impl(PyObject *module, Py_complex z)
         s2.real = 1.-z.imag;
         s2.imag = z.real;
         s2 = cmath_sqrt_impl(module, s2);
-        r.real = asinh(s1.real*s2.imag-s2.real*s1.imag);
+        r.real = m_asinh(s1.real*s2.imag-s2.real*s1.imag);
         r.imag = atan2(z.imag, s1.real*s2.real-s1.imag*s2.imag);
     }
     errno = 0;
@@ -1260,35 +1254,37 @@ static PyMethodDef cmath_methods[] = {
     {NULL, NULL}  /* sentinel */
 };
 
-static int
-cmath_exec(PyObject *mod)
-{
-    if (PyModule_AddObject(mod, "pi", PyFloat_FromDouble(Py_MATH_PI)) < 0) {
-        return -1;
-    }
-    if (PyModule_AddObject(mod, "e", PyFloat_FromDouble(Py_MATH_E)) < 0) {
-        return -1;
-    }
-    // 2pi
-    if (PyModule_AddObject(mod, "tau", PyFloat_FromDouble(Py_MATH_TAU)) < 0) {
-        return -1;
-    }
-    if (PyModule_AddObject(mod, "inf", PyFloat_FromDouble(m_inf())) < 0) {
-        return -1;
-    }
 
-    if (PyModule_AddObject(mod, "infj",
-                           PyComplex_FromCComplex(c_infj())) < 0) {
-        return -1;
-    }
+static struct PyModuleDef cmathmodule = {
+    PyModuleDef_HEAD_INIT,
+    "cmath",
+    module_doc,
+    -1,
+    cmath_methods,
+    NULL,
+    NULL,
+    NULL,
+    NULL
+};
+
+PyMODINIT_FUNC
+PyInit_cmath(void)
+{
+    PyObject *m;
+
+    m = PyModule_Create(&cmathmodule);
+    if (m == NULL)
+        return NULL;
+
+    PyModule_AddObject(m, "pi",
+                       PyFloat_FromDouble(Py_MATH_PI));
+    PyModule_AddObject(m, "e", PyFloat_FromDouble(Py_MATH_E));
+    PyModule_AddObject(m, "tau", PyFloat_FromDouble(Py_MATH_TAU)); /* 2pi */
+    PyModule_AddObject(m, "inf", PyFloat_FromDouble(m_inf()));
+    PyModule_AddObject(m, "infj", PyComplex_FromCComplex(c_infj()));
 #if !defined(PY_NO_SHORT_FLOAT_REPR) || defined(Py_NAN)
-    if (PyModule_AddObject(mod, "nan", PyFloat_FromDouble(m_nan())) < 0) {
-        return -1;
-    }
-    if (PyModule_AddObject(mod, "nanj",
-                           PyComplex_FromCComplex(c_nanj())) < 0) {
-        return -1;
-    }
+    PyModule_AddObject(m, "nan", PyFloat_FromDouble(m_nan()));
+    PyModule_AddObject(m, "nanj", PyComplex_FromCComplex(c_nanj()));
 #endif
 
     /* initialize special value tables */
@@ -1405,25 +1401,5 @@ cmath_exec(PyObject *mod)
       C(INF,N) C(U,U) C(INF,-0.) C(INF,0.)   C(U,U) C(INF,N) C(INF,N)
       C(N,N)   C(N,N) C(N,0.)    C(N,0.)     C(N,N) C(N,N)   C(N,N)
     })
-    return 0;
-}
-
-static PyModuleDef_Slot cmath_slots[] = {
-    {Py_mod_exec, cmath_exec},
-    {0, NULL}
-};
-
-static struct PyModuleDef cmathmodule = {
-    PyModuleDef_HEAD_INIT,
-    .m_name = "cmath",
-    .m_doc = module_doc,
-    .m_size = 0,
-    .m_methods = cmath_methods,
-    .m_slots = cmath_slots
-};
-
-PyMODINIT_FUNC
-PyInit_cmath(void)
-{
-    return PyModuleDef_Init(&cmathmodule);
+    return m;
 }

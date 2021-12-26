@@ -15,8 +15,7 @@ this type and there is exactly one in existence.
 
 #include "Python.h"
 #include "pycore_abstract.h"      // _PyIndex_Check()
-#include "pycore_long.h"          // _PyLong_GetZero()
-#include "pycore_object.h"        // _PyObject_GC_TRACK()
+#include "pycore_object.h"
 #include "structmember.h"         // PyMemberDef
 
 static PyObject *
@@ -96,12 +95,16 @@ PyObject _Py_EllipsisObject = {
 
 /* Slice object implementation */
 
+/* Using a cache is very effective since typically only a single slice is
+ * created and then deleted again
+ */
+static PySliceObject *slice_cache = NULL;
 
-void _PySlice_Fini(PyInterpreterState *interp)
+void _PySlice_Fini(void)
 {
-    PySliceObject *obj = interp->slice_cache;
+    PySliceObject *obj = slice_cache;
     if (obj != NULL) {
-        interp->slice_cache = NULL;
+        slice_cache = NULL;
         PyObject_GC_Del(obj);
     }
 }
@@ -113,35 +116,26 @@ void _PySlice_Fini(PyInterpreterState *interp)
 PyObject *
 PySlice_New(PyObject *start, PyObject *stop, PyObject *step)
 {
-    if (step == NULL) {
-        step = Py_None;
-    }
-    if (start == NULL) {
-        start = Py_None;
-    }
-    if (stop == NULL) {
-        stop = Py_None;
-    }
-
-    PyInterpreterState *interp = _PyInterpreterState_GET();
     PySliceObject *obj;
-    if (interp->slice_cache != NULL) {
-        obj = interp->slice_cache;
-        interp->slice_cache = NULL;
+    if (slice_cache != NULL) {
+        obj = slice_cache;
+        slice_cache = NULL;
         _Py_NewReference((PyObject *)obj);
-    }
-    else {
+    } else {
         obj = PyObject_GC_New(PySliceObject, &PySlice_Type);
-        if (obj == NULL) {
+        if (obj == NULL)
             return NULL;
-        }
     }
 
+    if (step == NULL) step = Py_None;
     Py_INCREF(step);
-    obj->step = step;
+    if (start == NULL) start = Py_None;
     Py_INCREF(start);
-    obj->start = start;
+    if (stop == NULL) stop = Py_None;
     Py_INCREF(stop);
+
+    obj->step = step;
+    obj->start = start;
     obj->stop = stop;
 
     _PyObject_GC_TRACK(obj);
@@ -330,17 +324,14 @@ Create a slice object.  This is used for extended slicing (e.g. a[0:10:2]).");
 static void
 slice_dealloc(PySliceObject *r)
 {
-    PyInterpreterState *interp = _PyInterpreterState_GET();
     _PyObject_GC_UNTRACK(r);
     Py_DECREF(r->step);
     Py_DECREF(r->start);
     Py_DECREF(r->stop);
-    if (interp->slice_cache == NULL) {
-        interp->slice_cache = r;
-    }
-    else {
+    if (slice_cache == NULL)
+        slice_cache = r;
+    else
         PyObject_GC_Del(r);
-    }
 }
 
 static PyObject *
@@ -388,7 +379,7 @@ _PySlice_GetLongIndices(PySliceObject *self, PyObject *length,
 
     /* Convert step to an integer; raise for zero step. */
     if (self->step == Py_None) {
-        step = _PyLong_GetOne();
+        step = _PyLong_One;
         Py_INCREF(step);
         step_is_negative = 0;
     }
@@ -417,7 +408,7 @@ _PySlice_GetLongIndices(PySliceObject *self, PyObject *length,
             goto error;
     }
     else {
-        lower = _PyLong_GetZero();
+        lower = _PyLong_Zero;
         Py_INCREF(lower);
         upper = length;
         Py_INCREF(upper);

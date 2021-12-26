@@ -55,7 +55,7 @@ equivalent to the above example::
    <yourscript> -q -foutfile
    <yourscript> -qfoutfile
 
-Additionally, users can run one of the following ::
+Additionally, users can run one of  ::
 
    <yourscript> -h
    <yourscript> --help

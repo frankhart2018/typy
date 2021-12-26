@@ -160,7 +160,8 @@ The following data items and methods are also supported:
    Read *n* items (as machine values) from the :term:`file object` *f* and append
    them to the end of the array.  If less than *n* items are available,
    :exc:`EOFError` is raised, but the items that were available are still
-   inserted into the array.
+   inserted into the array. *f* must be a real built-in file object; something
+   else with a :meth:`read` method won't do.
 
 
 .. method:: array.fromlist(list)
@@ -177,15 +178,11 @@ The following data items and methods are also supported:
    array of some other type.
 
 
-.. method:: array.index(x[, start[, stop]])
+.. method:: array.index(x)
 
    Return the smallest *i* such that *i* is the index of the first occurrence of
-   *x* in the array.  The optional arguments *start* and *stop* can be
-   specified to search for *x* within a subsection of the array.  Raise
-   :exc:`ValueError` if *x* is not found.
+   *x* in the array.
 
-   .. versionchanged:: 3.10
-      Added optional *start* and *stop* parameters.
 
 .. method:: array.insert(i, x)
 
@@ -260,6 +257,7 @@ Examples::
       Packing and unpacking of External Data Representation (XDR) data as used in some
       remote procedure call systems.
 
-   `NumPy <https://numpy.org/>`_
-      The NumPy package defines another array type.
+   `The Numerical Python Documentation <https://docs.scipy.org/doc/>`_
+      The Numeric Python extension (NumPy) defines another array type; see
+      http://www.numpy.org/ for further information about Numerical Python.
 

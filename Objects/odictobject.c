@@ -40,9 +40,9 @@ we've considered:
 
 The approach with the least performance impact (time and space) is #2,
 mirroring the key order of dict's dk_entries with an array of node pointers.
-While _Py_dict_lookup() does not give us the index into the array,
-we make use of pointer arithmetic to get that index.  An alternative would
-be to refactor _Py_dict_lookup() to provide the index, explicitly exposing
+While lookdict() and friends (dk_lookup) don't give us the index into the
+array, we make use of pointer arithmetic to get that index.  An alternative
+would be to refactor lookdict() to provide the index, explicitly exposing
 the implementation detail.  We could even just use a custom lookup function
 for OrderedDict that facilitates our need.  However, both approaches are
 significantly more complicated than just using pointer arithmetic.
@@ -459,16 +459,16 @@ later:
 - implement a fuller MutableMapping API in C?
 - move the MutableMapping implementation to abstract.c?
 - optimize mutablemapping_update
-- use PyObject_Malloc (small object allocator) for odict nodes?
+- use PyObject_MALLOC (small object allocator) for odict nodes?
 - support subclasses better (e.g. in odict_richcompare)
 
 */
 
 #include "Python.h"
-#include "pycore_call.h"          // _PyObject_CallNoArgs()
-#include "pycore_object.h"        // _PyObject_GC_UNTRACK()
-#include "pycore_dict.h"          // _Py_dict_lookup()
+#include "pycore_object.h"
 #include <stddef.h>               // offsetof()
+#include "dict-common.h"
+#include <stddef.h>
 
 #include "clinic/odictobject.c.h"
 
@@ -535,7 +535,7 @@ _odict_get_index_raw(PyODictObject *od, PyObject *key, Py_hash_t hash)
     PyDictKeysObject *keys = ((PyDictObject *)od)->ma_keys;
     Py_ssize_t ix;
 
-    ix = _Py_dict_lookup((PyDictObject *)od, key, hash, &value);
+    ix = (keys->dk_lookup)((PyDictObject *)od, key, hash, &value);
     if (ix == DKIX_EMPTY) {
         return keys->dk_nentries;  /* index of new entry */
     }
@@ -545,8 +545,6 @@ _odict_get_index_raw(PyODictObject *od, PyObject *key, Py_hash_t hash)
     return ix;
 }
 
-#define ONE ((Py_ssize_t)1)
-
 /* Replace od->od_fast_nodes with a new table matching the size of dict's. */
 static int
 _odict_resize(PyODictObject *od)
@@ -555,7 +553,7 @@ _odict_resize(PyODictObject *od)
     _ODictNode **fast_nodes, *node;
 
     /* Initialize a new "fast nodes" table. */
-    size = ONE << (((PyDictObject *)od)->ma_keys->dk_log2_size);
+    size = ((PyDictObject *)od)->ma_keys->dk_size;
     fast_nodes = PyMem_NEW(_ODictNode *, size);
     if (fast_nodes == NULL) {
         PyErr_NoMemory();
@@ -569,14 +567,14 @@ _odict_resize(PyODictObject *od)
         i = _odict_get_index_raw(od, _odictnode_KEY(node),
                                  _odictnode_HASH(node));
         if (i < 0) {
-            PyMem_Free(fast_nodes);
+            PyMem_FREE(fast_nodes);
             return -1;
         }
         fast_nodes[i] = node;
     }
 
     /* Replace the old fast nodes table. */
-    PyMem_Free(od->od_fast_nodes);
+    PyMem_FREE(od->od_fast_nodes);
     od->od_fast_nodes = fast_nodes;
     od->od_fast_nodes_size = size;
     od->od_resize_sentinel = ((PyDictObject *)od)->ma_keys;
@@ -594,7 +592,7 @@ _odict_get_index(PyODictObject *od, PyObject *key, Py_hash_t hash)
 
     /* Ensure od_fast_nodes and dk_entries are in sync. */
     if (od->od_resize_sentinel != keys ||
-        od->od_fast_nodes_size != (ONE << (keys->dk_log2_size))) {
+        od->od_fast_nodes_size != keys->dk_size) {
         int resize_res = _odict_resize(od);
         if (resize_res < 0)
             return -1;
@@ -685,7 +683,7 @@ _odict_add_new_node(PyODictObject *od, PyObject *key, Py_hash_t hash)
     }
 
     /* must not be added yet */
-    node = (_ODictNode *)PyMem_Malloc(sizeof(_ODictNode));
+    node = (_ODictNode *)PyMem_MALLOC(sizeof(_ODictNode));
     if (node == NULL) {
         Py_DECREF(key);
         PyErr_NoMemory();
@@ -703,7 +701,7 @@ _odict_add_new_node(PyODictObject *od, PyObject *key, Py_hash_t hash)
 #define _odictnode_DEALLOC(node) \
     do { \
         Py_DECREF(_odictnode_KEY(node)); \
-        PyMem_Free((void *)node); \
+        PyMem_FREE((void *)node); \
     } while (0)
 
 /* Repeated calls on the same node are no-ops. */
@@ -778,7 +776,7 @@ _odict_clear_nodes(PyODictObject *od)
 {
     _ODictNode *node, *next;
 
-    PyMem_Free(od->od_fast_nodes);
+    PyMem_FREE(od->od_fast_nodes);
     od->od_fast_nodes = NULL;
     od->od_fast_nodes_size = 0;
     od->od_resize_sentinel = NULL;
@@ -1047,26 +1045,83 @@ OrderedDict_setdefault_impl(PyODictObject *self, PyObject *key,
 
 /* pop() */
 
+PyDoc_STRVAR(odict_pop__doc__,
+"od.pop(k[,d]) -> v, remove specified key and return the corresponding\n\
+        value.  If key is not found, d is returned if given, otherwise KeyError\n\
+        is raised.\n\
+\n\
+        ");
+
+/* forward */
+static PyObject * _odict_popkey(PyObject *, PyObject *, PyObject *);
+
+/* Skips __missing__() calls. */
+static PyObject *
+odict_pop(PyObject *od, PyObject *args, PyObject *kwargs)
+{
+    static char *kwlist[] = {"key", "default", 0};
+    PyObject *key, *failobj = NULL;
+
+    /* borrowed */
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|O:pop", kwlist,
+                                     &key, &failobj)) {
+        return NULL;
+    }
+
+    return _odict_popkey(od, key, failobj);
+}
+
 static PyObject *
 _odict_popkey_hash(PyObject *od, PyObject *key, PyObject *failobj,
                    Py_hash_t hash)
 {
+    _ODictNode *node;
     PyObject *value = NULL;
 
-    _ODictNode *node = _odict_find_node_hash((PyODictObject *)od, key, hash);
-    if (node != NULL) {
-        /* Pop the node first to avoid a possible dict resize (due to
-           eval loop reentrancy) and complications due to hash collision
-           resolution. */
+    /* Pop the node first to avoid a possible dict resize (due to
+       eval loop reentrancy) and complications due to hash collision
+       resolution. */
+    node = _odict_find_node_hash((PyODictObject *)od, key, hash);
+    if (node == NULL) {
+        if (PyErr_Occurred())
+            return NULL;
+    }
+    else {
         int res = _odict_clear_node((PyODictObject *)od, node, key, hash);
         if (res < 0) {
             return NULL;
         }
-        /* Now delete the value from the dict. */
-        value = _PyDict_Pop_KnownHash(od, key, hash, failobj);
     }
-    else if (value == NULL && !PyErr_Occurred()) {
-        /* Apply the fallback value, if necessary. */
+
+    /* Now delete the value from the dict. */
+    if (PyODict_CheckExact(od)) {
+        if (node != NULL) {
+            value = _PyDict_GetItem_KnownHash(od, key, hash);  /* borrowed */
+            if (value != NULL) {
+                Py_INCREF(value);
+                if (_PyDict_DelItem_KnownHash(od, key, hash) < 0) {
+                    Py_DECREF(value);
+                    return NULL;
+                }
+            }
+        }
+    }
+    else {
+        int exists = PySequence_Contains(od, key);
+        if (exists < 0)
+            return NULL;
+        if (exists) {
+            value = PyObject_GetItem(od, key);
+            if (value != NULL) {
+                if (PyObject_DelItem(od, key) == -1) {
+                    Py_CLEAR(value);
+                }
+            }
+        }
+    }
+
+    /* Apply the fallback value, if necessary. */
+    if (value == NULL && !PyErr_Occurred()) {
         if (failobj) {
             value = failobj;
             Py_INCREF(failobj);
@@ -1079,28 +1134,14 @@ _odict_popkey_hash(PyObject *od, PyObject *key, PyObject *failobj,
     return value;
 }
 
-/* Skips __missing__() calls. */
-/*[clinic input]
-OrderedDict.pop
-
-    key: object
-    default: object = NULL
-
-od.pop(key[,default]) -> v, remove specified key and return the corresponding value.
-
-If the key is not found, return the default if given; otherwise,
-raise a KeyError.
-[clinic start generated code]*/
-
 static PyObject *
-OrderedDict_pop_impl(PyODictObject *self, PyObject *key,
-                     PyObject *default_value)
-/*[clinic end generated code: output=7a6447d104e7494b input=7efe36601007dff7]*/
+_odict_popkey(PyObject *od, PyObject *key, PyObject *failobj)
 {
     Py_hash_t hash = PyObject_Hash(key);
     if (hash == -1)
         return NULL;
-    return _odict_popkey_hash((PyObject *)self, key, default_value, hash);
+
+    return _odict_popkey_hash(od, key, failobj, hash);
 }
 
 
@@ -1203,7 +1244,7 @@ odict_copy(register PyODictObject *od, PyObject *Py_UNUSED(ignored))
     if (PyODict_CheckExact(od))
         od_copy = PyODict_New();
     else
-        od_copy = _PyObject_CallNoArgs((PyObject *)Py_TYPE(od));
+        od_copy = _PyObject_CallNoArg((PyObject *)Py_TYPE(od));
     if (od_copy == NULL)
         return NULL;
 
@@ -1321,7 +1362,8 @@ static PyMethodDef odict_methods[] = {
     {"__reduce__",      (PyCFunction)odict_reduce,      METH_NOARGS,
      odict_reduce__doc__},
     ORDEREDDICT_SETDEFAULT_METHODDEF
-    ORDEREDDICT_POP_METHODDEF
+    {"pop",             (PyCFunction)(void(*)(void))odict_pop,
+     METH_VARARGS | METH_KEYWORDS, odict_pop__doc__},
     ORDEREDDICT_POPITEM_METHODDEF
     {"keys",            odictkeys_new,                  METH_NOARGS,
      odict_keys__doc__},
@@ -1775,11 +1817,6 @@ odictiter_iternext(odictiterobject *di)
         Py_INCREF(result);
         Py_DECREF(PyTuple_GET_ITEM(result, 0));  /* borrowed */
         Py_DECREF(PyTuple_GET_ITEM(result, 1));  /* borrowed */
-        // bpo-42536: The GC may have untracked this result tuple. Since we're
-        // recycling it, make sure it's tracked again:
-        if (!_PyObject_GC_IS_TRACKED(result)) {
-            _PyObject_GC_TRACK(result);
-        }
     }
     else {
         result = PyTuple_New(2);
@@ -2221,7 +2258,7 @@ mutablemapping_update_arg(PyObject *self, PyObject *arg)
         return -1;
     }
     if (func != NULL) {
-        PyObject *keys = _PyObject_CallNoArgs(func);
+        PyObject *keys = _PyObject_CallNoArg(func);
         Py_DECREF(func);
         if (keys == NULL) {
             return -1;
@@ -2253,7 +2290,7 @@ mutablemapping_update_arg(PyObject *self, PyObject *arg)
         return -1;
     }
     if (func != NULL) {
-        PyObject *items = _PyObject_CallNoArgs(func);
+        PyObject *items = _PyObject_CallNoArg(func);
         Py_DECREF(func);
         if (items == NULL) {
             return -1;

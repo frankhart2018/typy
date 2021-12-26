@@ -48,52 +48,37 @@ typedef enum {
     TYPE_UNKNOWN
 } parameter_type;
 
-pysqlite_Statement *
-pysqlite_statement_create(pysqlite_Connection *connection, PyObject *sql)
+int pysqlite_statement_create(pysqlite_Statement* self, pysqlite_Connection* connection, PyObject* sql)
 {
-    pysqlite_state *state = connection->state;
-    assert(PyUnicode_Check(sql));
-    Py_ssize_t size;
-    const char *sql_cstr = PyUnicode_AsUTF8AndSize(sql, &size);
-    if (sql_cstr == NULL) {
-        return NULL;
-    }
-
-    sqlite3 *db = connection->db;
-    int max_length = sqlite3_limit(db, SQLITE_LIMIT_SQL_LENGTH, -1);
-    if (size > max_length) {
-        PyErr_SetString(connection->DataError,
-                        "query string is too large");
-        return NULL;
-    }
-    if (strlen(sql_cstr) != (size_t)size) {
-        PyErr_SetString(PyExc_ValueError,
-                        "the query contains a null character");
-        return NULL;
-    }
-
-    sqlite3_stmt *stmt;
-    const char *tail;
+    const char* tail;
     int rc;
-    Py_BEGIN_ALLOW_THREADS
-    rc = sqlite3_prepare_v2(db, sql_cstr, (int)size + 1, &stmt, &tail);
-    Py_END_ALLOW_THREADS
+    const char* sql_cstr;
+    Py_ssize_t sql_cstr_len;
+    const char* p;
 
-    if (rc != SQLITE_OK) {
-        _pysqlite_seterror(state, db);
-        return NULL;
+    self->st = NULL;
+    self->in_use = 0;
+
+    assert(PyUnicode_Check(sql));
+
+    sql_cstr = PyUnicode_AsUTF8AndSize(sql, &sql_cstr_len);
+    if (sql_cstr == NULL) {
+        rc = PYSQLITE_SQL_WRONG_TYPE;
+        return rc;
+    }
+    if (strlen(sql_cstr) != (size_t)sql_cstr_len) {
+        PyErr_SetString(PyExc_ValueError, "the query contains a null character");
+        return PYSQLITE_SQL_WRONG_TYPE;
     }
 
-    if (pysqlite_check_remaining_sql(tail)) {
-        PyErr_SetString(connection->Warning,
-                        "You can only execute one statement at a time.");
-        goto error;
-    }
+    self->in_weakreflist = NULL;
+    Py_INCREF(sql);
+    self->sql = sql;
 
     /* Determine if the statement is a DML statement.
        SELECT is the only exception. See #9924. */
-    int is_dml = 0;
-    for (const char *p = sql_cstr; *p != 0; p++) {
+    self->is_dml = 0;
+    for (p = sql_cstr; *p != 0; p++) {
         switch (*p) {
             case ' ':
             case '\r':
@@ -102,29 +87,30 @@ pysqlite_statement_create(pysqlite_Connection *connection, PyObject *sql)
                 continue;
         }
 
-        is_dml = (PyOS_strnicmp(p, "insert", 6) == 0)
-                  || (PyOS_strnicmp(p, "update", 6) == 0)
-                  || (PyOS_strnicmp(p, "delete", 6) == 0)
-                  || (PyOS_strnicmp(p, "replace", 7) == 0);
+        self->is_dml = (PyOS_strnicmp(p, "insert", 6) == 0)
+                    || (PyOS_strnicmp(p, "update", 6) == 0)
+                    || (PyOS_strnicmp(p, "delete", 6) == 0)
+                    || (PyOS_strnicmp(p, "replace", 7) == 0);
         break;
     }
 
-    pysqlite_Statement *self = PyObject_GC_New(pysqlite_Statement,
-                                               state->StatementType);
-    if (self == NULL) {
-        goto error;
+    Py_BEGIN_ALLOW_THREADS
+    rc = sqlite3_prepare_v2(connection->db,
+                            sql_cstr,
+                            -1,
+                            &self->st,
+                            &tail);
+    Py_END_ALLOW_THREADS
+
+    self->db = connection->db;
+
+    if (rc == SQLITE_OK && pysqlite_check_remaining_sql(tail)) {
+        (void)sqlite3_finalize(self->st);
+        self->st = NULL;
+        rc = PYSQLITE_TOO_MUCH_SQL;
     }
 
-    self->st = stmt;
-    self->in_use = 0;
-    self->is_dml = is_dml;
-
-    PyObject_GC_Track(self);
-    return self;
-
-error:
-    (void)sqlite3_finalize(stmt);
-    return NULL;
+    return rc;
 }
 
 int pysqlite_statement_bind_parameter(pysqlite_Statement* self, int pos, PyObject* parameter)
@@ -205,10 +191,9 @@ final:
 }
 
 /* returns 0 if the object is one of Python's internal ones that don't need to be adapted */
-static int
-_need_adapt(pysqlite_state *state, PyObject *obj)
+static int _need_adapt(PyObject* obj)
 {
-    if (state->BaseTypeAdapted) {
+    if (pysqlite_BaseTypeAdapted) {
         return 1;
     }
 
@@ -220,10 +205,7 @@ _need_adapt(pysqlite_state *state, PyObject *obj)
     }
 }
 
-void
-pysqlite_statement_bind_parameters(pysqlite_state *state,
-                                   pysqlite_Statement *self,
-                                   PyObject *parameters)
+void pysqlite_statement_bind_parameters(pysqlite_Statement* self, PyObject* parameters)
 {
     PyObject* current_param;
     PyObject* adapted;
@@ -245,12 +227,9 @@ pysqlite_statement_bind_parameters(pysqlite_state *state,
             num_params = PyList_GET_SIZE(parameters);
         } else {
             num_params = PySequence_Size(parameters);
-            if (num_params == -1) {
-                return;
-            }
         }
         if (num_params != num_params_needed) {
-            PyErr_Format(state->ProgrammingError,
+            PyErr_Format(pysqlite_ProgrammingError,
                          "Incorrect number of bindings supplied. The current "
                          "statement uses %d, and there are %zd supplied.",
                          num_params_needed, num_params);
@@ -258,11 +237,11 @@ pysqlite_statement_bind_parameters(pysqlite_state *state,
         }
         for (i = 0; i < num_params; i++) {
             if (PyTuple_CheckExact(parameters)) {
-                PyObject *item = PyTuple_GET_ITEM(parameters, i);
-                current_param = Py_NewRef(item);
+                current_param = PyTuple_GET_ITEM(parameters, i);
+                Py_XINCREF(current_param);
             } else if (PyList_CheckExact(parameters)) {
-                PyObject *item = PyList_GetItem(parameters, i);
-                current_param = Py_XNewRef(item);
+                current_param = PyList_GET_ITEM(parameters, i);
+                Py_XINCREF(current_param);
             } else {
                 current_param = PySequence_GetItem(parameters, i);
             }
@@ -270,13 +249,10 @@ pysqlite_statement_bind_parameters(pysqlite_state *state,
                 return;
             }
 
-            if (!_need_adapt(state, current_param)) {
+            if (!_need_adapt(current_param)) {
                 adapted = current_param;
             } else {
-                PyObject *protocol = (PyObject *)state->PrepareProtocolType;
-                adapted = pysqlite_microprotocols_adapt(state, current_param,
-                                                        protocol,
-                                                        current_param);
+                adapted = pysqlite_microprotocols_adapt(current_param, (PyObject*)&pysqlite_PrepareProtocolType, current_param);
                 Py_DECREF(current_param);
                 if (!adapted) {
                     return;
@@ -288,9 +264,7 @@ pysqlite_statement_bind_parameters(pysqlite_state *state,
 
             if (rc != SQLITE_OK) {
                 if (!PyErr_Occurred()) {
-                    PyErr_Format(state->InterfaceError,
-                                 "Error binding parameter %d - "
-                                 "probably unsupported type.", i);
+                    PyErr_Format(pysqlite_InterfaceError, "Error binding parameter %d - probably unsupported type.", i);
                 }
                 return;
             }
@@ -303,9 +277,7 @@ pysqlite_statement_bind_parameters(pysqlite_state *state,
             binding_name = sqlite3_bind_parameter_name(self->st, i);
             Py_END_ALLOW_THREADS
             if (!binding_name) {
-                PyErr_Format(state->ProgrammingError,
-                             "Binding %d has no name, but you supplied a "
-                             "dictionary (which has only names).", i);
+                PyErr_Format(pysqlite_ProgrammingError, "Binding %d has no name, but you supplied a dictionary (which has only names).", i);
                 return;
             }
 
@@ -315,28 +287,23 @@ pysqlite_statement_bind_parameters(pysqlite_state *state,
                 return;
             }
             if (PyDict_CheckExact(parameters)) {
-                PyObject *item = PyDict_GetItemWithError(parameters, binding_name_obj);
-                current_param = Py_XNewRef(item);
+                current_param = PyDict_GetItemWithError(parameters, binding_name_obj);
+                Py_XINCREF(current_param);
             } else {
                 current_param = PyObject_GetItem(parameters, binding_name_obj);
             }
             Py_DECREF(binding_name_obj);
             if (!current_param) {
                 if (!PyErr_Occurred() || PyErr_ExceptionMatches(PyExc_LookupError)) {
-                    PyErr_Format(state->ProgrammingError,
-                                 "You did not supply a value for binding "
-                                 "parameter :%s.", binding_name);
+                    PyErr_Format(pysqlite_ProgrammingError, "You did not supply a value for binding %d.", i);
                 }
                 return;
             }
 
-            if (!_need_adapt(state, current_param)) {
+            if (!_need_adapt(current_param)) {
                 adapted = current_param;
             } else {
-                PyObject *protocol = (PyObject *)state->PrepareProtocolType;
-                adapted = pysqlite_microprotocols_adapt(state, current_param,
-                                                        protocol,
-                                                        current_param);
+                adapted = pysqlite_microprotocols_adapt(current_param, (PyObject*)&pysqlite_PrepareProtocolType, current_param);
                 Py_DECREF(current_param);
                 if (!adapted) {
                     return;
@@ -348,9 +315,7 @@ pysqlite_statement_bind_parameters(pysqlite_state *state,
 
             if (rc != SQLITE_OK) {
                 if (!PyErr_Occurred()) {
-                    PyErr_Format(state->InterfaceError,
-                                 "Error binding parameter :%s - "
-                                 "probably unsupported type.", binding_name);
+                    PyErr_Format(pysqlite_InterfaceError, "Error binding parameter :%s - probably unsupported type.", binding_name);
                 }
                 return;
            }
@@ -358,6 +323,23 @@ pysqlite_statement_bind_parameters(pysqlite_state *state,
     } else {
         PyErr_SetString(PyExc_ValueError, "parameters are of unsupported type");
     }
+}
+
+int pysqlite_statement_finalize(pysqlite_Statement* self)
+{
+    int rc;
+
+    rc = SQLITE_OK;
+    if (self->st) {
+        Py_BEGIN_ALLOW_THREADS
+        rc = sqlite3_finalize(self->st);
+        Py_END_ALLOW_THREADS
+        self->st = NULL;
+    }
+
+    self->in_use = 0;
+
+    return rc;
 }
 
 int pysqlite_statement_reset(pysqlite_Statement* self)
@@ -384,26 +366,23 @@ void pysqlite_statement_mark_dirty(pysqlite_Statement* self)
     self->in_use = 1;
 }
 
-static void
-stmt_dealloc(pysqlite_Statement *self)
+void pysqlite_statement_dealloc(pysqlite_Statement* self)
 {
-    PyTypeObject *tp = Py_TYPE(self);
-    PyObject_GC_UnTrack(self);
     if (self->st) {
         Py_BEGIN_ALLOW_THREADS
         sqlite3_finalize(self->st);
         Py_END_ALLOW_THREADS
-        self->st = 0;
     }
-    tp->tp_free(self);
-    Py_DECREF(tp);
-}
 
-static int
-stmt_traverse(pysqlite_Statement *self, visitproc visit, void *arg)
-{
-    Py_VISIT(Py_TYPE(self));
-    return 0;
+    self->st = NULL;
+
+    Py_XDECREF(self->sql);
+
+    if (self->in_weakreflist != NULL) {
+        PyObject_ClearWeakRefs((PyObject*)self);
+    }
+
+    Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
 /*
@@ -476,28 +455,50 @@ static int pysqlite_check_remaining_sql(const char* tail)
     return 0;
 }
 
-static PyType_Slot stmt_slots[] = {
-    {Py_tp_dealloc, stmt_dealloc},
-    {Py_tp_traverse, stmt_traverse},
-    {0, NULL},
+PyTypeObject pysqlite_StatementType = {
+        PyVarObject_HEAD_INIT(NULL, 0)
+        MODULE_NAME ".Statement",                       /* tp_name */
+        sizeof(pysqlite_Statement),                     /* tp_basicsize */
+        0,                                              /* tp_itemsize */
+        (destructor)pysqlite_statement_dealloc,         /* tp_dealloc */
+        0,                                              /* tp_vectorcall_offset */
+        0,                                              /* tp_getattr */
+        0,                                              /* tp_setattr */
+        0,                                              /* tp_as_async */
+        0,                                              /* tp_repr */
+        0,                                              /* tp_as_number */
+        0,                                              /* tp_as_sequence */
+        0,                                              /* tp_as_mapping */
+        0,                                              /* tp_hash */
+        0,                                              /* tp_call */
+        0,                                              /* tp_str */
+        0,                                              /* tp_getattro */
+        0,                                              /* tp_setattro */
+        0,                                              /* tp_as_buffer */
+        Py_TPFLAGS_DEFAULT,                             /* tp_flags */
+        0,                                              /* tp_doc */
+        0,                                              /* tp_traverse */
+        0,                                              /* tp_clear */
+        0,                                              /* tp_richcompare */
+        offsetof(pysqlite_Statement, in_weakreflist),   /* tp_weaklistoffset */
+        0,                                              /* tp_iter */
+        0,                                              /* tp_iternext */
+        0,                                              /* tp_methods */
+        0,                                              /* tp_members */
+        0,                                              /* tp_getset */
+        0,                                              /* tp_base */
+        0,                                              /* tp_dict */
+        0,                                              /* tp_descr_get */
+        0,                                              /* tp_descr_set */
+        0,                                              /* tp_dictoffset */
+        (initproc)0,                                    /* tp_init */
+        0,                                              /* tp_alloc */
+        0,                                              /* tp_new */
+        0                                               /* tp_free */
 };
 
-static PyType_Spec stmt_spec = {
-    .name = MODULE_NAME ".Statement",
-    .basicsize = sizeof(pysqlite_Statement),
-    .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
-              Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_DISALLOW_INSTANTIATION),
-    .slots = stmt_slots,
-};
-
-int
-pysqlite_statement_setup_types(PyObject *module)
+extern int pysqlite_statement_setup_types(void)
 {
-    PyObject *type = PyType_FromModuleAndSpec(module, &stmt_spec, NULL);
-    if (type == NULL) {
-        return -1;
-    }
-    pysqlite_state *state = pysqlite_get_state(module);
-    state->StatementType = (PyTypeObject *)type;
-    return 0;
+    pysqlite_StatementType.tp_new = PyType_GenericNew;
+    return PyType_Ready(&pysqlite_StatementType);
 }

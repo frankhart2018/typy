@@ -283,13 +283,6 @@ do_mktuple(const char **p_format, va_list *p_va, char endchar, Py_ssize_t n, int
 static PyObject *
 do_mkvalue(const char **p_format, va_list *p_va, int flags)
 {
-#define ERROR_NEED_PY_SSIZE_T_CLEAN \
-    { \
-        PyErr_SetString(PyExc_SystemError, \
-                        "PY_SSIZE_T_CLEAN macro must be defined for '#' formats"); \
-        return NULL; \
-    }
-
     for (;;) {
         switch (*(*p_format)++) {
         case '(':
@@ -348,12 +341,14 @@ do_mkvalue(const char **p_format, va_list *p_va, int flags)
             Py_ssize_t n;
             if (**p_format == '#') {
                 ++*p_format;
-                if (flags & FLAG_SIZE_T) {
+                if (flags & FLAG_SIZE_T)
                     n = va_arg(*p_va, Py_ssize_t);
-                }
                 else {
                     n = va_arg(*p_va, int);
-                    ERROR_NEED_PY_SSIZE_T_CLEAN;
+                    if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                                "PY_SSIZE_T_CLEAN will be required for '#' formats", 1)) {
+                        return NULL;
+                    }
                 }
             }
             else
@@ -399,12 +394,14 @@ do_mkvalue(const char **p_format, va_list *p_va, int flags)
             Py_ssize_t n;
             if (**p_format == '#') {
                 ++*p_format;
-                if (flags & FLAG_SIZE_T) {
+                if (flags & FLAG_SIZE_T)
                     n = va_arg(*p_va, Py_ssize_t);
-                }
                 else {
                     n = va_arg(*p_va, int);
-                    ERROR_NEED_PY_SSIZE_T_CLEAN;
+                    if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                                "PY_SSIZE_T_CLEAN will be required for '#' formats", 1)) {
+                        return NULL;
+                    }
                 }
             }
             else
@@ -435,12 +432,14 @@ do_mkvalue(const char **p_format, va_list *p_va, int flags)
             Py_ssize_t n;
             if (**p_format == '#') {
                 ++*p_format;
-                if (flags & FLAG_SIZE_T) {
+                if (flags & FLAG_SIZE_T)
                     n = va_arg(*p_va, Py_ssize_t);
-                }
                 else {
                     n = va_arg(*p_va, int);
-                    ERROR_NEED_PY_SSIZE_T_CLEAN;
+                    if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                                "PY_SSIZE_T_CLEAN will be required for '#' formats", 1)) {
+                        return NULL;
+                    }
                 }
             }
             else
@@ -508,8 +507,6 @@ do_mkvalue(const char **p_format, va_list *p_va, int flags)
 
         }
     }
-
-#undef ERROR_NEED_PY_SSIZE_T_CLEAN
 }
 
 
@@ -622,9 +619,6 @@ va_build_stack(PyObject **small_stack, Py_ssize_t small_stack_len,
     va_end(lva);
 
     if (res < 0) {
-        if (stack != small_stack) {
-            PyMem_Free(stack);
-        }
         return NULL;
     }
 
@@ -634,70 +628,56 @@ va_build_stack(PyObject **small_stack, Py_ssize_t small_stack_len,
 
 
 int
-PyModule_AddObjectRef(PyObject *mod, const char *name, PyObject *value)
+PyModule_AddObject(PyObject *m, const char *name, PyObject *o)
 {
-    if (!PyModule_Check(mod)) {
+    PyObject *dict;
+    if (!PyModule_Check(m)) {
         PyErr_SetString(PyExc_TypeError,
-                        "PyModule_AddObjectRef() first argument "
-                        "must be a module");
+                    "PyModule_AddObject() needs module as first arg");
         return -1;
     }
-    if (!value) {
-        if (!PyErr_Occurred()) {
-            PyErr_SetString(PyExc_SystemError,
-                            "PyModule_AddObjectRef() must be called "
-                            "with an exception raised if value is NULL");
-        }
+    if (!o) {
+        if (!PyErr_Occurred())
+            PyErr_SetString(PyExc_TypeError,
+                            "PyModule_AddObject() needs non-NULL value");
         return -1;
     }
 
-    PyObject *dict = PyModule_GetDict(mod);
+    dict = PyModule_GetDict(m);
     if (dict == NULL) {
         /* Internal error -- modules must have a dict! */
         PyErr_Format(PyExc_SystemError, "module '%s' has no __dict__",
-                     PyModule_GetName(mod));
+                     PyModule_GetName(m));
         return -1;
     }
-
-    if (PyDict_SetItemString(dict, name, value)) {
+    if (PyDict_SetItemString(dict, name, o))
         return -1;
-    }
+    Py_DECREF(o);
     return 0;
-}
-
-
-int
-PyModule_AddObject(PyObject *mod, const char *name, PyObject *value)
-{
-    int res = PyModule_AddObjectRef(mod, name, value);
-    if (res == 0) {
-        Py_DECREF(value);
-    }
-    return res;
 }
 
 int
 PyModule_AddIntConstant(PyObject *m, const char *name, long value)
 {
-    PyObject *obj = PyLong_FromLong(value);
-    if (!obj) {
+    PyObject *o = PyLong_FromLong(value);
+    if (!o)
         return -1;
-    }
-    int res = PyModule_AddObjectRef(m, name, obj);
-    Py_DECREF(obj);
-    return res;
+    if (PyModule_AddObject(m, name, o) == 0)
+        return 0;
+    Py_DECREF(o);
+    return -1;
 }
 
 int
 PyModule_AddStringConstant(PyObject *m, const char *name, const char *value)
 {
-    PyObject *obj = PyUnicode_FromString(value);
-    if (!obj) {
+    PyObject *o = PyUnicode_FromString(value);
+    if (!o)
         return -1;
-    }
-    int res = PyModule_AddObjectRef(m, name, obj);
-    Py_DECREF(obj);
-    return res;
+    if (PyModule_AddObject(m, name, o) == 0)
+        return 0;
+    Py_DECREF(o);
+    return -1;
 }
 
 int
@@ -710,5 +690,11 @@ PyModule_AddType(PyObject *module, PyTypeObject *type)
     const char *name = _PyType_Name(type);
     assert(name != NULL);
 
-    return PyModule_AddObjectRef(module, name, (PyObject *)type);
+    Py_INCREF(type);
+    if (PyModule_AddObject(module, name, (PyObject *)type) < 0) {
+        Py_DECREF(type);
+        return -1;
+    }
+
+    return 0;
 }

@@ -10,7 +10,6 @@ from asyncio import base_events
 from asyncio import constants
 from unittest import mock
 from test import support
-from test.support import os_helper
 from test.support import socket_helper
 from test.test_asyncio import utils as test_utils
 
@@ -36,29 +35,25 @@ class MySendfileProto(asyncio.Protocol):
         self.data = bytearray()
         self.close_after = close_after
 
-    def _assert_state(self, *expected):
-        if self.state not in expected:
-            raise AssertionError(f'state: {self.state!r}, expected: {expected!r}')
-
     def connection_made(self, transport):
         self.transport = transport
-        self._assert_state('INITIAL')
+        assert self.state == 'INITIAL', self.state
         self.state = 'CONNECTED'
         if self.connected:
             self.connected.set_result(None)
 
     def eof_received(self):
-        self._assert_state('CONNECTED')
+        assert self.state == 'CONNECTED', self.state
         self.state = 'EOF'
 
     def connection_lost(self, exc):
-        self._assert_state('CONNECTED', 'EOF')
+        assert self.state in ('CONNECTED', 'EOF'), self.state
         self.state = 'CLOSED'
         if self.done:
             self.done.set_result(None)
 
     def data_received(self, data):
-        self._assert_state('CONNECTED')
+        assert self.state == 'CONNECTED', self.state
         self.nbytes += len(data)
         self.data.extend(data)
         super().data_received(data)
@@ -103,17 +98,17 @@ class SendfileBase:
 
     @classmethod
     def setUpClass(cls):
-        with open(os_helper.TESTFN, 'wb') as fp:
+        with open(support.TESTFN, 'wb') as fp:
             fp.write(cls.DATA)
         super().setUpClass()
 
     @classmethod
     def tearDownClass(cls):
-        os_helper.unlink(os_helper.TESTFN)
+        support.unlink(support.TESTFN)
         super().tearDownClass()
 
     def setUp(self):
-        self.file = open(os_helper.TESTFN, 'rb')
+        self.file = open(support.TESTFN, 'rb')
         self.addCleanup(self.file.close)
         self.loop = self.create_event_loop()
         self.set_event_loop(self.loop)
@@ -450,12 +445,6 @@ class SendfileMixin(SendfileBase):
         self.assertEqual(srv_proto.data, self.DATA)
         self.assertEqual(self.file.tell(), len(self.DATA))
 
-    # On Solaris, lowering SO_RCVBUF on a TCP connection after it has been
-    # established has no effect. Due to its age, this bug affects both Oracle
-    # Solaris as well as all other OpenSolaris forks (unless they fixed it
-    # themselves).
-    @unittest.skipIf(sys.platform.startswith('sunos'),
-                     "Doesn't work on Solaris")
     def test_sendfile_close_peer_in_the_middle_of_receiving(self):
         srv_proto, cli_proto = self.prepare_sendfile(close_after=1024)
         with self.assertRaises(ConnectionError):

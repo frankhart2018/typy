@@ -173,7 +173,7 @@ class BuildPyTestCase(support.TempdirManager,
 
 
 def test_suite():
-    return unittest.TestLoader().loadTestsFromTestCase(BuildPyTestCase)
+    return unittest.makeSuite(BuildPyTestCase)
 
 if __name__ == "__main__":
     run_unittest(test_suite())

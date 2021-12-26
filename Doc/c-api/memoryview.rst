@@ -27,7 +27,7 @@ any other object.
 
    .. versionadded:: 3.3
 
-.. c:function:: PyObject *PyMemoryView_FromBuffer(const Py_buffer *view)
+.. c:function:: PyObject *PyMemoryView_FromBuffer(Py_buffer *view)
 
    Create a memoryview object wrapping the given buffer structure *view*.
    For simple byte buffers, :c:func:`PyMemoryView_FromMemory` is the preferred
@@ -45,8 +45,7 @@ any other object.
 .. c:function:: int PyMemoryView_Check(PyObject *obj)
 
    Return true if the object *obj* is a memoryview object.  It is not
-   currently allowed to create subclasses of :class:`memoryview`.  This
-   function always succeeds.
+   currently allowed to create subclasses of :class:`memoryview`.
 
 
 .. c:function:: Py_buffer *PyMemoryView_GET_BUFFER(PyObject *mview)
@@ -61,3 +60,4 @@ any other object.
    on or ``NULL`` if the memoryview has been created by one of the functions
    :c:func:`PyMemoryView_FromMemory` or :c:func:`PyMemoryView_FromBuffer`.
    *mview* **must** be a memoryview instance.
+

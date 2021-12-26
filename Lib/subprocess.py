@@ -5,6 +5,7 @@
 # Copyright (c) 2003-2005 by Peter Astrand <astrand@lysator.liu.se>
 #
 # Licensed to PSF under a Contributor Agreement.
+# See http://www.python.org/2.4/license for licensing details.
 
 r"""Subprocesses with accessible I/O streams
 
@@ -54,10 +55,13 @@ from time import monotonic as _time
 import types
 
 try:
-    import fcntl
+    import pwd
 except ImportError:
-    fcntl = None
-
+    pwd = None
+try:
+    import grp
+except ImportError:
+    grp = None
 
 __all__ = ["Popen", "PIPE", "STDOUT", "call", "check_call", "getstatusoutput",
            "getoutput", "check_output", "run", "CalledProcessError", "DEVNULL",
@@ -322,7 +326,7 @@ def _args_from_interpreter_flags():
     if dev_mode:
         args.extend(('-X', 'dev'))
     for opt in ('faulthandler', 'tracemalloc', 'importtime',
-                'showrefcount', 'utf8'):
+                'showrefcount', 'utf8', 'oldparser'):
         if opt in xoptions:
             value = xoptions[opt]
             if value is True:
@@ -405,18 +409,13 @@ def check_output(*popenargs, timeout=None, **kwargs):
     decoded according to locale encoding, or by "encoding" if set. Text mode
     is triggered by setting any of text, encoding, errors or universal_newlines.
     """
-    for kw in ('stdout', 'check'):
-        if kw in kwargs:
-            raise ValueError(f'{kw} argument not allowed, it will be overridden.')
+    if 'stdout' in kwargs:
+        raise ValueError('stdout argument not allowed, it will be overridden.')
 
     if 'input' in kwargs and kwargs['input'] is None:
         # Explicitly passing input=None was previously equivalent to passing an
         # empty string. That is maintained here for backwards compatibility.
-        if kwargs.get('universal_newlines') or kwargs.get('text'):
-            empty = ''
-        else:
-            empty = b''
-        kwargs['input'] = empty
+        kwargs['input'] = '' if kwargs.get('universal_newlines', False) else b''
 
     return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,
                **kwargs).stdout
@@ -661,9 +660,8 @@ def _use_posix_spawn():
         # os.posix_spawn() is not available
         return False
 
-    if sys.platform in ('darwin', 'sunos5'):
-        # posix_spawn() is a syscall on both macOS and Solaris,
-        # and properly reports errors
+    if sys.platform == 'darwin':
+        # posix_spawn() is a syscall on macOS and properly reports errors
         return True
 
     # Check libc name and runtime libc version
@@ -695,7 +693,7 @@ def _use_posix_spawn():
 _USE_POSIX_SPAWN = _use_posix_spawn()
 
 
-class Popen:
+class Popen(object):
     """ Execute a child program in a new process.
 
     For a complete description of the arguments see the Python documentation.
@@ -758,7 +756,7 @@ class Popen:
                  startupinfo=None, creationflags=0,
                  restore_signals=True, start_new_session=False,
                  pass_fds=(), *, user=None, group=None, extra_groups=None,
-                 encoding=None, errors=None, text=None, umask=-1, pipesize=-1):
+                 encoding=None, errors=None, text=None, umask=-1):
         """Create new Popen instance."""
         _cleanup()
         # Held while anything is calling waitpid before returncode has been
@@ -774,11 +772,6 @@ class Popen:
             bufsize = -1  # Restore default
         if not isinstance(bufsize, int):
             raise TypeError("bufsize must be an integer")
-
-        if pipesize is None:
-            pipesize = -1  # Restore default
-        if not isinstance(pipesize, int):
-            raise TypeError("pipesize must be an integer")
 
         if _mswindows:
             if preexec_fn is not None:
@@ -804,7 +797,6 @@ class Popen:
         self.returncode = None
         self.encoding = encoding
         self.errors = errors
-        self.pipesize = pipesize
 
         # Validate the combinations of text and universal_newlines
         if (text is not None and universal_newlines is not None
@@ -846,13 +838,6 @@ class Popen:
 
         self.text_mode = encoding or errors or text or universal_newlines
 
-        # PEP 597: We suppress the EncodingWarning in subprocess module
-        # for now (at Python 3.10), because we focus on files for now.
-        # This will be changed to encoding = io.text_encoding(encoding)
-        # in the future.
-        if self.text_mode and encoding is None:
-            self.encoding = encoding = "locale"
-
         # How long to resume waiting on a child after the first ^C.
         # There is no right value for this.  The purpose is to be polite
         # yet remain good for interactive users trying to exit a tool.
@@ -876,9 +861,7 @@ class Popen:
                                  "current platform")
 
             elif isinstance(group, str):
-                try:
-                    import grp
-                except ImportError:
+                if grp is None:
                     raise ValueError("The group parameter cannot be a string "
                                      "on systems without the grp module")
 
@@ -904,9 +887,7 @@ class Popen:
             gids = []
             for extra_group in extra_groups:
                 if isinstance(extra_group, str):
-                    try:
-                        import grp
-                    except ImportError:
+                    if grp is None:
                         raise ValueError("Items in extra_groups cannot be "
                                          "strings on systems without the "
                                          "grp module")
@@ -932,11 +913,10 @@ class Popen:
                                  "the current platform")
 
             elif isinstance(user, str):
-                try:
-                    import pwd
-                except ImportError:
+                if pwd is None:
                     raise ValueError("The user parameter cannot be a string "
                                      "on systems without the pwd module")
+
                 uid = pwd.getpwnam(user).pw_uid
             elif isinstance(user, int):
                 uid = user
@@ -1005,7 +985,7 @@ class Popen:
     def __repr__(self):
         obj_repr = (
             f"<{self.__class__.__name__}: "
-            f"returncode: {self.returncode} args: {self.args!r}>"
+            f"returncode: {self.returncode} args: {list(self.args)!r}>"
         )
         if len(obj_repr) > 80:
             obj_repr = obj_repr[:76] + "...>"
@@ -1541,8 +1521,10 @@ class Popen:
                 self.stderr.close()
 
             # All data exchanged.  Translate lists into strings.
-            stdout = stdout[0] if stdout else None
-            stderr = stderr[0] if stderr else None
+            if stdout is not None:
+                stdout = stdout[0]
+            if stderr is not None:
+                stderr = stderr[0]
 
             return (stdout, stderr)
 
@@ -1593,8 +1575,6 @@ class Popen:
                 pass
             elif stdin == PIPE:
                 p2cread, p2cwrite = os.pipe()
-                if self.pipesize > 0 and hasattr(fcntl, "F_SETPIPE_SZ"):
-                    fcntl.fcntl(p2cwrite, fcntl.F_SETPIPE_SZ, self.pipesize)
             elif stdin == DEVNULL:
                 p2cread = self._get_devnull()
             elif isinstance(stdin, int):
@@ -1607,8 +1587,6 @@ class Popen:
                 pass
             elif stdout == PIPE:
                 c2pread, c2pwrite = os.pipe()
-                if self.pipesize > 0 and hasattr(fcntl, "F_SETPIPE_SZ"):
-                    fcntl.fcntl(c2pwrite, fcntl.F_SETPIPE_SZ, self.pipesize)
             elif stdout == DEVNULL:
                 c2pwrite = self._get_devnull()
             elif isinstance(stdout, int):
@@ -1621,8 +1599,6 @@ class Popen:
                 pass
             elif stderr == PIPE:
                 errread, errwrite = os.pipe()
-                if self.pipesize > 0 and hasattr(fcntl, "F_SETPIPE_SZ"):
-                    fcntl.fcntl(errwrite, fcntl.F_SETPIPE_SZ, self.pipesize)
             elif stderr == STDOUT:
                 if c2pwrite != -1:
                     errwrite = c2pwrite
@@ -2085,11 +2061,7 @@ class Popen:
             # The race condition can still happen if the race condition
             # described above happens between the returncode test
             # and the kill() call.
-            try:
-                os.kill(self.pid, sig)
-            except ProcessLookupError:
-                # Suppress the race condition error; bpo-40550.
-                pass
+            os.kill(self.pid, sig)
 
         def terminate(self):
             """Terminate the process with SIGTERM

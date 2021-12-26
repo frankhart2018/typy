@@ -20,7 +20,7 @@ ctypes tutorial
 
 Note: The code samples in this tutorial use :mod:`doctest` to make sure that
 they actually work.  Since some code samples behave differently under Linux,
-Windows, or macOS, they contain doctest directives in comments.
+Windows, or Mac OS X, they contain doctest directives in comments.
 
 Note: Some code samples reference the ctypes :class:`c_int` type.  On platforms
 where ``sizeof(long) == sizeof(int)`` it is an alias to :class:`c_long`.
@@ -80,7 +80,7 @@ the library by creating an instance of CDLL by calling the constructor::
    <CDLL 'libc.so.6', handle ... at ...>
    >>>
 
-.. XXX Add section for macOS.
+.. XXX Add section for Mac OS X.
 
 
 .. _ctypes-accessing-functions-from-loaded-dlls:
@@ -330,9 +330,10 @@ property::
    10 b'Hi\x00lo\x00\x00\x00\x00\x00'
    >>>
 
-The :func:`create_string_buffer` function replaces the old :func:`c_buffer`
-function (which is still available as an alias).  To create a mutable memory
-block containing unicode characters of the C type :c:type:`wchar_t`, use the
+The :func:`create_string_buffer` function replaces the :func:`c_buffer` function
+(which is still available as an alias), as well as the :func:`c_string` function
+from earlier ctypes releases.  To create a mutable memory block containing
+unicode characters of the C type :c:type:`wchar_t` use the
 :func:`create_unicode_buffer` function.
 
 
@@ -918,9 +919,9 @@ Let's try it. We create two instances of ``cell``, and let them point to each
 other, and finally follow the pointer chain a few times::
 
    >>> c1 = cell()
-   >>> c1.name = b"foo"
+   >>> c1.name = "foo"
    >>> c2 = cell()
-   >>> c2.name = b"bar"
+   >>> c2.name = "bar"
    >>> c1.next = pointer(c2)
    >>> c2.next = pointer(c1)
    >>> p = c1
@@ -1087,9 +1088,7 @@ size, we show only how this table can be read with :mod:`ctypes`::
    >>> class struct_frozen(Structure):
    ...     _fields_ = [("name", c_char_p),
    ...                 ("code", POINTER(c_ubyte)),
-   ...                 ("size", c_int),
-   ...                 ("get_code", POINTER(c_ubyte)),  # Function pointer
-   ...                ]
+   ...                 ("size", c_int)]
    ...
    >>>
 
@@ -1097,7 +1096,7 @@ We have defined the :c:type:`struct _frozen` data type, so we can get the pointe
 to the table::
 
    >>> FrozenTable = POINTER(struct_frozen)
-   >>> table = FrozenTable.in_dll(pythonapi, "_PyImport_FrozenBootstrap")
+   >>> table = FrozenTable.in_dll(pythonapi, "PyImport_FrozenModules")
    >>>
 
 Since ``table`` is a ``pointer`` to the array of ``struct_frozen`` records, we
@@ -1113,7 +1112,9 @@ hit the ``NULL`` entry::
    ...
    _frozen_importlib 31764
    _frozen_importlib_external 41499
-   zipimport 12345
+   __hello__ 161
+   __phello__ -161
+   __phello__.spam 161
    >>>
 
 The fact that standard Python has a frozen module and a frozen package
@@ -1287,7 +1288,7 @@ Here are some examples::
    'libbz2.so.1.0'
    >>>
 
-On macOS, :func:`find_library` tries several predefined naming schemes and paths
+On OS X, :func:`find_library` tries several predefined naming schemes and paths
 to locate the library, and returns a full pathname if successful::
 
    >>> from ctypes.util import find_library
@@ -1319,29 +1320,14 @@ There are several ways to load shared libraries into the Python process.  One
 way is to instantiate one of the following classes:
 
 
-.. class:: CDLL(name, mode=DEFAULT_MODE, handle=None, use_errno=False, use_last_error=False, winmode=None)
+.. class:: CDLL(name, mode=DEFAULT_MODE, handle=None, use_errno=False, use_last_error=False, winmode=0)
 
    Instances of this class represent loaded shared libraries. Functions in these
    libraries use the standard C calling convention, and are assumed to return
    :c:type:`int`.
 
-   On Windows creating a :class:`CDLL` instance may fail even if the DLL name
-   exists. When a dependent DLL of the loaded DLL is not found, a
-   :exc:`OSError` error is raised with the message *"[WinError 126] The
-   specified module could not be found".* This error message does not contain
-   the name of the missing DLL because the Windows API does not return this
-   information making this error hard to diagnose. To resolve this error and
-   determine which DLL is not found, you need to find the list of dependent
-   DLLs and determine which one is not found using Windows debugging and
-   tracing tools.
 
-.. seealso::
-
-    `Microsoft DUMPBIN tool <https://docs.microsoft.com/cpp/build/reference/dependents>`_
-    -- A tool to find DLL dependents.
-
-
-.. class:: OleDLL(name, mode=DEFAULT_MODE, handle=None, use_errno=False, use_last_error=False, winmode=None)
+.. class:: OleDLL(name, mode=DEFAULT_MODE, handle=None, use_errno=False, use_last_error=False, winmode=0)
 
    Windows only: Instances of this class represent loaded shared libraries,
    functions in these libraries use the ``stdcall`` calling convention, and are
@@ -1354,7 +1340,7 @@ way is to instantiate one of the following classes:
       :exc:`WindowsError` used to be raised.
 
 
-.. class:: WinDLL(name, mode=DEFAULT_MODE, handle=None, use_errno=False, use_last_error=False, winmode=None)
+.. class:: WinDLL(name, mode=DEFAULT_MODE, handle=None, use_errno=False, use_last_error=False, winmode=0)
 
    Windows only: Instances of this class represent loaded shared libraries,
    functions in these libraries use the ``stdcall`` calling convention, and are
@@ -1632,7 +1618,7 @@ They are instances of a private class:
    ``ctypes.seh_exception`` with argument ``code`` will be raised, allowing an
    audit hook to replace the exception with its own.
 
-.. audit-event:: ctypes.call_function func_pointer,arguments foreign-functions
+.. audit-event:: ctypes.call_function func_pointer,arguments ctype-foreign-functions
 
    Some ways to invoke foreign function calls may raise an auditing event
    ``ctypes.call_function`` with arguments ``function pointer`` and ``arguments``.
@@ -2507,7 +2493,7 @@ other data types containing pointer type fields.
 Arrays and pointers
 ^^^^^^^^^^^^^^^^^^^
 
-.. class:: Array(*args)
+.. class:: Array(\*args)
 
    Abstract base class for arrays.
 
@@ -2559,3 +2545,4 @@ Arrays and pointers
 
         Returns the object to which to pointer points.  Assigning to this
         attribute changes the pointer to point to the assigned object.
+

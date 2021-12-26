@@ -32,6 +32,16 @@ try:
 except ImportError:
     _LZMA_SUPPORTED = False
 
+try:
+    from pwd import getpwnam
+except ImportError:
+    getpwnam = None
+
+try:
+    from grp import getgrnam
+except ImportError:
+    getgrnam = None
+
 _WINDOWS = os.name == 'nt'
 posix = nt = None
 if os.name == 'posix':
@@ -40,13 +50,8 @@ elif _WINDOWS:
     import nt
 
 COPY_BUFSIZE = 1024 * 1024 if _WINDOWS else 64 * 1024
-# This should never be removed, see rationale in:
-# https://bugs.python.org/issue43743#msg393429
 _USE_CP_SENDFILE = hasattr(os, "sendfile") and sys.platform.startswith("linux")
 _HAS_FCOPYFILE = posix and hasattr(posix, "_fcopyfile")  # macOS
-
-# CMD defaults in Windows 10
-_WIN_DEFAULT_PATHEXT = ".COM;.EXE;.BAT;.CMD;.VBS;.JS;.WS;.MSC"
 
 __all__ = ["copyfileobj", "copyfile", "copymode", "copystat", "copy", "copy2",
            "copytree", "move", "rmtree", "Error", "SpecialFileError",
@@ -188,9 +193,9 @@ def _copyfileobj_readinto(fsrc, fdst, length=COPY_BUFSIZE):
 
 def copyfileobj(fsrc, fdst, length=0):
     """copy data from file-like object fsrc to file-like object fdst"""
+    # Localize variable access to minimize overhead.
     if not length:
         length = COPY_BUFSIZE
-    # Localize variable access to minimize overhead.
     fsrc_read = fsrc.read
     fdst_write = fdst.write
     while True:
@@ -253,37 +258,28 @@ def copyfile(src, dst, *, follow_symlinks=True):
     if not follow_symlinks and _islink(src):
         os.symlink(os.readlink(src), dst)
     else:
-        with open(src, 'rb') as fsrc:
-            try:
-                with open(dst, 'wb') as fdst:
-                    # macOS
-                    if _HAS_FCOPYFILE:
-                        try:
-                            _fastcopy_fcopyfile(fsrc, fdst, posix._COPYFILE_DATA)
-                            return dst
-                        except _GiveupOnFastCopy:
-                            pass
-                    # Linux
-                    elif _USE_CP_SENDFILE:
-                        try:
-                            _fastcopy_sendfile(fsrc, fdst)
-                            return dst
-                        except _GiveupOnFastCopy:
-                            pass
-                    # Windows, see:
-                    # https://github.com/python/cpython/pull/7160#discussion_r195405230
-                    elif _WINDOWS and file_size > 0:
-                        _copyfileobj_readinto(fsrc, fdst, min(file_size, COPY_BUFSIZE))
-                        return dst
+        with open(src, 'rb') as fsrc, open(dst, 'wb') as fdst:
+            # macOS
+            if _HAS_FCOPYFILE:
+                try:
+                    _fastcopy_fcopyfile(fsrc, fdst, posix._COPYFILE_DATA)
+                    return dst
+                except _GiveupOnFastCopy:
+                    pass
+            # Linux
+            elif _USE_CP_SENDFILE:
+                try:
+                    _fastcopy_sendfile(fsrc, fdst)
+                    return dst
+                except _GiveupOnFastCopy:
+                    pass
+            # Windows, see:
+            # https://github.com/python/cpython/pull/7160#discussion_r195405230
+            elif _WINDOWS and file_size > 0:
+                _copyfileobj_readinto(fsrc, fdst, min(file_size, COPY_BUFSIZE))
+                return dst
 
-                    copyfileobj(fsrc, fdst)
-
-            # Issue 43219, raise a less confusing exception
-            except IsADirectoryError as e:
-                if not os.path.exists(dst):
-                    raise FileNotFoundError(f'Directory does not exist: {dst}') from e
-                else:
-                    raise
+            copyfileobj(fsrc, fdst)
 
     return dst
 
@@ -712,7 +708,7 @@ def rmtree(path, ignore_errors=False, onerror=None):
         try:
             fd = os.open(path, os.O_RDONLY)
         except Exception:
-            onerror(os.open, path, sys.exc_info())
+            onerror(os.lstat, path, sys.exc_info())
             return
         try:
             if os.path.samestat(orig_st, os.fstat(fd)):
@@ -814,12 +810,6 @@ def move(src, dst, copy_function=copy2):
             if _destinsrc(src, dst):
                 raise Error("Cannot move a directory '%s' into itself"
                             " '%s'." % (src, dst))
-            if (_is_immutable(src)
-                    or (not os.access(src, os.W_OK) and os.listdir(src)
-                        and sys.platform == 'darwin')):
-                raise PermissionError("Cannot move the non-empty directory "
-                                      "'%s': Lacking write permission to '%s'."
-                                      % (src, src))
             copytree(src, real_dst, copy_function=copy_function,
                      symlinks=True)
             rmtree(src)
@@ -837,21 +827,10 @@ def _destinsrc(src, dst):
         dst += os.path.sep
     return dst.startswith(src)
 
-def _is_immutable(src):
-    st = _stat(src)
-    immutable_states = [stat.UF_IMMUTABLE, stat.SF_IMMUTABLE]
-    return hasattr(st, 'st_flags') and st.st_flags in immutable_states
-
 def _get_gid(name):
     """Returns a gid, given a group name."""
-    if name is None:
+    if getgrnam is None or name is None:
         return None
-
-    try:
-        from grp import getgrnam
-    except ImportError:
-        return None
-
     try:
         result = getgrnam(name)
     except KeyError:
@@ -862,14 +841,8 @@ def _get_gid(name):
 
 def _get_uid(name):
     """Returns an uid, given a user name."""
-    if name is None:
+    if getpwnam is None or name is None:
         return None
-
-    try:
-        from pwd import getpwnam
-    except ImportError:
-        return None
-
     try:
         result = getpwnam(name)
     except KeyError:
@@ -1172,16 +1145,20 @@ def _unpack_zipfile(filename, extract_dir):
             if name.startswith('/') or '..' in name:
                 continue
 
-            targetpath = os.path.join(extract_dir, *name.split('/'))
-            if not targetpath:
+            target = os.path.join(extract_dir, *name.split('/'))
+            if not target:
                 continue
 
-            _ensure_directory(targetpath)
+            _ensure_directory(target)
             if not name.endswith('/'):
                 # file
-                with zip.open(name, 'r') as source, \
-                        open(targetpath, 'wb') as target:
-                    copyfileobj(source, target)
+                data = zip.read(info.filename)
+                f = open(target, 'wb')
+                try:
+                    f.write(data)
+                finally:
+                    f.close()
+                    del data
     finally:
         zip.close()
 
@@ -1372,9 +1349,9 @@ def get_terminal_size(fallback=(80, 24)):
             # os.get_terminal_size() is unsupported
             size = os.terminal_size(fallback)
         if columns <= 0:
-            columns = size.columns or fallback[0]
+            columns = size.columns
         if lines <= 0:
-            lines = size.lines or fallback[1]
+            lines = size.lines
 
     return os.terminal_size((columns, lines))
 
@@ -1438,9 +1415,7 @@ def which(cmd, mode=os.F_OK | os.X_OK, path=None):
             path.insert(0, curdir)
 
         # PATHEXT is necessary to check on Windows.
-        pathext_source = os.getenv("PATHEXT") or _WIN_DEFAULT_PATHEXT
-        pathext = [ext for ext in pathext_source.split(os.pathsep) if ext]
-
+        pathext = os.environ.get("PATHEXT", "").split(os.pathsep)
         if use_bytes:
             pathext = [os.fsencode(ext) for ext in pathext]
         # See if the given file matches any of the expected path extensions.

@@ -15,8 +15,8 @@ import subprocess
 import sys
 import tempfile
 from test.support import (captured_stdout, captured_stderr, requires_zlib,
-                          skip_if_broken_multiprocessing_synchronize, verbose)
-from test.support.os_helper import (can_symlink, EnvironmentVarGuard, rmtree)
+                          can_symlink, EnvironmentVarGuard, rmtree,
+                          import_module)
 import unittest
 import venv
 from unittest.mock import patch
@@ -40,8 +40,6 @@ def check_output(cmd, encoding=None):
         encoding=encoding)
     out, err = p.communicate()
     if p.returncode:
-        if verbose and err:
-            print(err.decode('utf-8', 'backslashreplace'))
         raise subprocess.CalledProcessError(
             p.returncode, cmd, out, err)
     return out, err
@@ -81,8 +79,8 @@ class BaseTest(unittest.TestCase):
     def get_env_file(self, *args):
         return os.path.join(self.env_dir, *args)
 
-    def get_text_file_contents(self, *args, encoding='utf-8'):
-        with open(self.get_env_file(*args), 'r', encoding=encoding) as f:
+    def get_text_file_contents(self, *args):
+        with open(self.get_env_file(*args), 'r') as f:
             result = f.read()
         return result
 
@@ -152,20 +150,14 @@ class BasicTest(BaseTest):
     def test_upgrade_dependencies(self):
         builder = venv.EnvBuilder()
         bin_path = 'Scripts' if sys.platform == 'win32' else 'bin'
-        python_exe = os.path.split(sys.executable)[1]
+        python_exe = 'python.exe' if sys.platform == 'win32' else 'python'
         with tempfile.TemporaryDirectory() as fake_env_dir:
-            expect_exe = os.path.normcase(
-                os.path.join(fake_env_dir, bin_path, python_exe)
-            )
-            if sys.platform == 'win32':
-                expect_exe = os.path.normcase(os.path.realpath(expect_exe))
 
             def pip_cmd_checker(cmd):
-                cmd[0] = os.path.normcase(cmd[0])
                 self.assertEqual(
                     cmd,
                     [
-                        expect_exe,
+                        os.path.join(fake_env_dir, bin_path, python_exe),
                         '-m',
                         'pip',
                         'install',
@@ -196,7 +188,7 @@ class BasicTest(BaseTest):
             ('base_exec_prefix', sys.base_exec_prefix)):
             cmd[2] = 'import sys; print(sys.%s)' % prefix
             out, err = check_output(cmd)
-            self.assertEqual(out.strip(), expected.encode(), prefix)
+            self.assertEqual(out.strip(), expected.encode())
 
     if sys.platform == 'win32':
         ENV_SUBDIRS = (
@@ -365,11 +357,10 @@ class BasicTest(BaseTest):
         """
         Test that the multiprocessing is able to spawn.
         """
-        # bpo-36342: Instantiation of a Pool object imports the
+        # Issue bpo-36342: Instantiation of a Pool object imports the
         # multiprocessing.synchronize module. Skip the test if this module
         # cannot be imported.
-        skip_if_broken_multiprocessing_synchronize()
-
+        import_module('multiprocessing.synchronize')
         rmtree(self.env_dir)
         self.run_with_capture(venv.create, self.env_dir)
         envpy = os.path.join(os.path.realpath(self.env_dir),
@@ -454,7 +445,7 @@ class EnsurePipTest(BaseTest):
             # pip's cross-version compatibility may trigger deprecation
             # warnings in current versions of Python. Ensure related
             # environment settings don't cause venv to fail.
-            envvars["PYTHONWARNINGS"] = "ignore"
+            envvars["PYTHONWARNINGS"] = "e"
             # ensurepip is different enough from a normal pip invocation
             # that we want to ensure it ignores the normal pip environment
             # variable settings. We set PIP_NO_INSTALL here specifically
@@ -493,8 +484,7 @@ class EnsurePipTest(BaseTest):
         # Ensure pip is available in the virtual environment
         envpy = os.path.join(os.path.realpath(self.env_dir), self.bindir, self.exe)
         # Ignore DeprecationWarning since pip code is not part of Python
-        out, err = check_output([envpy, '-W', 'ignore::DeprecationWarning',
-               '-W', 'ignore::ImportWarning', '-I',
+        out, err = check_output([envpy, '-W', 'ignore::DeprecationWarning', '-I',
                '-m', 'pip', '--version'])
         # We force everything to text, so unittest gives the detailed diff
         # if we get unexpected results
@@ -510,12 +500,8 @@ class EnsurePipTest(BaseTest):
         # Check the private uninstall command provided for the Windows
         # installers works (at least in a virtual environment)
         with EnvironmentVarGuard() as envvars:
-            # It seems ensurepip._uninstall calls subprocesses which do not
-            # inherit the interpreter settings.
-            envvars["PYTHONWARNINGS"] = "ignore"
             out, err = check_output([envpy,
-                '-W', 'ignore::DeprecationWarning',
-                '-W', 'ignore::ImportWarning', '-I',
+                '-W', 'ignore::DeprecationWarning', '-I',
                 '-m', 'ensurepip._uninstall'])
         # We force everything to text, so unittest gives the detailed diff
         # if we get unexpected results
@@ -527,7 +513,7 @@ class EnsurePipTest(BaseTest):
         #    executing pip with sudo, you may want sudo's -H flag."
         # where $HOME is replaced by the HOME environment variable.
         err = re.sub("^(WARNING: )?The directory .* or its parent directory "
-                     "is not owned or is not writable by the current user.*$", "",
+                     "is not owned by the current user .*$", "",
                      err, flags=re.MULTILINE)
         self.assertEqual(err.rstrip(), "")
         # Being fairly specific regarding the expected behaviour for the

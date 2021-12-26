@@ -1,8 +1,8 @@
 import sys
 import unittest
-from test.support import import_helper
+from test import support
 
-pwd = import_helper.import_module('pwd')
+pwd = support.import_module('pwd')
 
 @unittest.skipUnless(hasattr(pwd, 'getpwall'), 'Does not have getpwall()')
 class PwdTest(unittest.TestCase):

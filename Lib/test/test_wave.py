@@ -107,7 +107,8 @@ class WavePCM32Test(WaveTest, unittest.TestCase):
 
 class MiscTestCase(unittest.TestCase):
     def test__all__(self):
-        support.check__all__(self, wave, not_exported={'WAVE_FORMAT_PCM'})
+        blacklist = {'WAVE_FORMAT_PCM'}
+        support.check__all__(self, wave, blacklist=blacklist)
 
 
 class WaveLowLevelTest(unittest.TestCase):

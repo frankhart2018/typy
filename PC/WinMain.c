@@ -4,7 +4,6 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
-#include <stdlib.h>  /* __argc, __wargv */
 
 int WINAPI wWinMain(
     HINSTANCE hInstance,      /* handle to current instance */

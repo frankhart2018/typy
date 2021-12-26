@@ -1,21 +1,28 @@
 import sys
 import unittest
 
-from . import fixtures
+from contextlib import ExitStack
 from importlib.metadata import (
-    PackageNotFoundError,
-    distribution,
-    distributions,
-    entry_points,
-    files,
-    version,
+    distribution, entry_points, files, PackageNotFoundError, version,
 )
+from importlib.resources import path
+
+from test.support import requires_zlib
 
 
-class TestZip(fixtures.ZipFixtures, unittest.TestCase):
+@requires_zlib()
+class TestZip(unittest.TestCase):
+    root = 'test.test_importlib.data'
+
     def setUp(self):
-        super().setUp()
-        self._fixture_on_path('example-21.12-py3-none-any.whl')
+        # Find the path to the example-*.whl so we can add it to the front of
+        # sys.path, where we'll then try to find the metadata thereof.
+        self.resources = ExitStack()
+        self.addCleanup(self.resources.close)
+        wheel = self.resources.enter_context(
+            path(self.root, 'example-21.12-py3-none-any.whl'))
+        sys.path.insert(0, str(wheel))
+        self.resources.callback(sys.path.pop, 0)
 
     def test_zip_version(self):
         self.assertEqual(version('example'), '21.12')
@@ -25,7 +32,7 @@ class TestZip(fixtures.ZipFixtures, unittest.TestCase):
             version('definitely-not-installed')
 
     def test_zip_entry_points(self):
-        scripts = entry_points(group='console_scripts')
+        scripts = dict(entry_points()['console_scripts'])
         entry_point = scripts['example']
         self.assertEqual(entry_point.value, 'example:main')
         entry_point = scripts['Example']
@@ -42,21 +49,20 @@ class TestZip(fixtures.ZipFixtures, unittest.TestCase):
             path = str(file.dist.locate_file(file))
             assert '.whl/' in path, path
 
-    def test_one_distribution(self):
-        dists = list(distributions(path=sys.path[:1]))
-        assert len(dists) == 1
 
-
+@requires_zlib()
 class TestEgg(TestZip):
     def setUp(self):
-        super().setUp()
-        self._fixture_on_path('example-21.12-py3.6.egg')
+        # Find the path to the example-*.egg so we can add it to the front of
+        # sys.path, where we'll then try to find the metadata thereof.
+        self.resources = ExitStack()
+        self.addCleanup(self.resources.close)
+        egg = self.resources.enter_context(
+            path(self.root, 'example-21.12-py3.6.egg'))
+        sys.path.insert(0, str(egg))
+        self.resources.callback(sys.path.pop, 0)
 
     def test_files(self):
         for file in files('example'):
             path = str(file.dist.locate_file(file))
             assert '.egg/' in path, path
-
-    def test_normalized_name(self):
-        dist = distribution('example')
-        assert dist._normalized_name == 'example'

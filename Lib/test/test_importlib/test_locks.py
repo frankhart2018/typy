@@ -4,11 +4,9 @@ init = test_util.import_importlib('importlib')
 
 import sys
 import threading
-import unittest
 import weakref
 
 from test import support
-from test.support import threading_helper
 from test import lock_tests
 
 
@@ -140,10 +138,15 @@ class LifetimeTests:
  ) = test_util.test_both(LifetimeTests, init=init)
 
 
-def setUpModule():
-    thread_info = threading_helper.threading_setup()
-    unittest.addModuleCleanup(threading_helper.threading_cleanup, *thread_info)
+@support.reap_threads
+def test_main():
+    support.run_unittest(Frozen_ModuleLockAsRLockTests,
+                         Source_ModuleLockAsRLockTests,
+                         Frozen_DeadlockAvoidanceTests,
+                         Source_DeadlockAvoidanceTests,
+                         Frozen_LifetimeTests,
+                         Source_LifetimeTests)
 
 
 if __name__ == '__main__':
-    unittets.main()
+    test_main()

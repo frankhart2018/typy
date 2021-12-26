@@ -6,12 +6,10 @@
 #define PY_SSIZE_T_CLEAN
 
 #include "Python.h"
-#if defined(HAVE_UUID_H)
-  // AIX, FreeBSD, libuuid with pkgconf
-  #include <uuid.h>
-#elif defined(HAVE_UUID_UUID_H)
-  // libuuid without pkgconf
-  #include <uuid/uuid.h>
+#ifdef HAVE_UUID_UUID_H
+#include <uuid/uuid.h>
+#elif defined(HAVE_UUID_H)
+#include <uuid.h>
 #endif
 
 #ifdef MS_WINDOWS

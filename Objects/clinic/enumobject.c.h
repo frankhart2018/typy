@@ -64,8 +64,7 @@ reversed_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     PyObject *return_value = NULL;
     PyObject *seq;
 
-    if ((type == &PyReversed_Type ||
-         type->tp_init == PyReversed_Type.tp_init) &&
+    if ((type == &PyReversed_Type) &&
         !_PyArg_NoKeywords("reversed", kwargs)) {
         goto exit;
     }
@@ -78,4 +77,4 @@ reversed_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=a3937b6b33499560 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=e18c3fefcf914ec7 input=a9049054013a1b77]*/

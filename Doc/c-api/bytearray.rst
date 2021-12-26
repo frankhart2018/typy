@@ -25,13 +25,13 @@ Type check macros
 .. c:function:: int PyByteArray_Check(PyObject *o)
 
    Return true if the object *o* is a bytearray object or an instance of a
-   subtype of the bytearray type.  This function always succeeds.
+   subtype of the bytearray type.
 
 
 .. c:function:: int PyByteArray_CheckExact(PyObject *o)
 
    Return true if the object *o* is a bytearray object, but not an instance of a
-   subtype of the bytearray type.  This function always succeeds.
+   subtype of the bytearray type.
 
 
 Direct API functions

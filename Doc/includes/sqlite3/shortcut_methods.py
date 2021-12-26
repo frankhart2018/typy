@@ -1,23 +1,23 @@
 import sqlite3
 
-langs = [
-    ("C++", 1985),
-    ("Objective-C", 1984),
-]
+persons = [
+    ("Hugo", "Boss"),
+    ("Calvin", "Klein")
+    ]
 
 con = sqlite3.connect(":memory:")
 
 # Create the table
-con.execute("create table lang(name, first_appeared)")
+con.execute("create table person(firstname, lastname)")
 
 # Fill the table
-con.executemany("insert into lang(name, first_appeared) values (?, ?)", langs)
+con.executemany("insert into person(firstname, lastname) values (?, ?)", persons)
 
 # Print the table contents
-for row in con.execute("select name, first_appeared from lang"):
+for row in con.execute("select firstname, lastname from person"):
     print(row)
 
-print("I just deleted", con.execute("delete from lang").rowcount, "rows")
+print("I just deleted", con.execute("delete from person").rowcount, "rows")
 
 # close is not a shortcut method and it's not called automatically,
 # so the connection object should be closed manually

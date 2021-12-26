@@ -135,7 +135,7 @@ class PyPIRCCommandTestCase(BasePyPIRCCommandTestCase):
 
 
 def test_suite():
-    return unittest.TestLoader().loadTestsFromTestCase(PyPIRCCommandTestCase)
+    return unittest.makeSuite(PyPIRCCommandTestCase)
 
 if __name__ == "__main__":
     run_unittest(test_suite())

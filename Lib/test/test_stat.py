@@ -2,11 +2,8 @@ import unittest
 import os
 import socket
 import sys
-from test.support import os_helper
 from test.support import socket_helper
-from test.support.import_helper import import_fresh_module
-from test.support.os_helper import TESTFN
-
+from test.support import TESTFN, import_fresh_module
 
 c_stat = import_fresh_module('stat', fresh=['_stat'])
 py_stat = import_fresh_module('stat', blocked=['_stat'])
@@ -174,16 +171,11 @@ class TestFilemode:
 
     @unittest.skipUnless(hasattr(os, 'mkfifo'), 'os.mkfifo not available')
     def test_fifo(self):
-        if sys.platform == "vxworks":
-            fifo_path = os.path.join("/fifos/", TESTFN)
-        else:
-            fifo_path = TESTFN
-        self.addCleanup(os_helper.unlink, fifo_path)
         try:
-            os.mkfifo(fifo_path, 0o700)
+            os.mkfifo(TESTFN, 0o700)
         except PermissionError as e:
             self.skipTest('os.mkfifo(): %s' % e)
-        st_mode, modestr = self.get_mode(fifo_path)
+        st_mode, modestr = self.get_mode()
         self.assertEqual(modestr, 'prwx------')
         self.assertS_IS("FIFO", st_mode)
 

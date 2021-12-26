@@ -1,4 +1,4 @@
-/* This file is included (from xmltok.c, 1-3 times depending on XML_MIN_SIZE)!
+/* This file is included!
                             __  __            _
                          ___\ \/ /_ __   __ _| |_
                         / _ \\  /| '_ \ / _` | __|
@@ -7,15 +7,7 @@
                                  |_| XML parser
 
    Copyright (c) 1997-2000 Thai Open Source Software Center Ltd
-   Copyright (c) 2000      Clark Cooper <coopercc@users.sourceforge.net>
-   Copyright (c) 2002      Fred L. Drake, Jr. <fdrake@users.sourceforge.net>
-   Copyright (c) 2002-2016 Karl Waclawek <karl@waclawek.net>
-   Copyright (c) 2016-2021 Sebastian Pipping <sebastian@pipping.org>
-   Copyright (c) 2017      Rhodri James <rhodri@wildebeest.org.uk>
-   Copyright (c) 2018      Benjamin Peterson <benjamin@python.org>
-   Copyright (c) 2018      Anton Maklakov <antmak.pub@gmail.com>
-   Copyright (c) 2019      David Loffredo <loffredo@steptools.com>
-   Copyright (c) 2020      Boris Kolpackov <boris@codesynthesis.com>
+   Copyright (c) 2000-2017 Expat development team
    Licensed under the MIT license:
 
    Permission is  hereby granted,  free of charge,  to any  person obtaining
@@ -40,7 +32,7 @@
 
 #ifdef XML_TOK_IMPL_C
 
-#  ifndef IS_INVALID_CHAR // i.e. for UTF-16 and XML_MIN_SIZE not defined
+#  ifndef IS_INVALID_CHAR
 #    define IS_INVALID_CHAR(enc, ptr, n) (0)
 #  endif
 
@@ -1776,14 +1768,13 @@ PREFIX(updatePosition)(const ENCODING *enc, const char *ptr, const char *end,
 #  define LEAD_CASE(n)                                                         \
   case BT_LEAD##n:                                                             \
     ptr += n;                                                                  \
-    pos->columnNumber++;                                                       \
     break;
       LEAD_CASE(2)
       LEAD_CASE(3)
       LEAD_CASE(4)
 #  undef LEAD_CASE
     case BT_LF:
-      pos->columnNumber = 0;
+      pos->columnNumber = (XML_Size)-1;
       pos->lineNumber++;
       ptr += MINBPC(enc);
       break;
@@ -1792,13 +1783,13 @@ PREFIX(updatePosition)(const ENCODING *enc, const char *ptr, const char *end,
       ptr += MINBPC(enc);
       if (HAS_CHAR(enc, ptr, end) && BYTE_TYPE(enc, ptr) == BT_LF)
         ptr += MINBPC(enc);
-      pos->columnNumber = 0;
+      pos->columnNumber = (XML_Size)-1;
       break;
     default:
       ptr += MINBPC(enc);
-      pos->columnNumber++;
       break;
     }
+    pos->columnNumber++;
   }
 }
 

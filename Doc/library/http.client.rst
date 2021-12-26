@@ -99,11 +99,6 @@ The module provides the following classes:
       :attr:`ssl.SSLContext.post_handshake_auth` for the default *context* or
       when *cert_file* is passed with a custom *context*.
 
-   .. versionchanged:: 3.10
-      This class now sends an ALPN extension with protocol indicator
-      ``http/1.1`` when no *context* is given. Custom *context* should set
-      ALPN protocols with :meth:`~ssl.SSLContext.set_alpn_protocol`.
-
    .. deprecated:: 3.6
 
        *key_file* and *cert_file* are deprecated in favor of *context*.
@@ -368,8 +363,6 @@ HTTPConnection Objects
    this is called automatically when making a request if the client does not
    already have a connection.
 
-   .. audit-event:: http.client.connect self,host,port http.client.HTTPConnection.connect
-
 
 .. method:: HTTPConnection.close()
 
@@ -438,8 +431,6 @@ also send your request step by step, by using the four functions below.
    Send data to the server.  This should be used directly only after the
    :meth:`endheaders` method has been called and before :meth:`getresponse` is
    called.
-
-   .. audit-event:: http.client.send self,data http.client.HTTPConnection.send
 
 
 .. _httpresponse-objects:

@@ -241,14 +241,10 @@ middle of a quoted string.
    triple: debugger; configuration; file
 
 If a file :file:`.pdbrc` exists in the user's home directory or in the current
-directory, it is read with ``'utf-8'`` encoding and executed as if it had been
-typed at the debugger prompt.  This is particularly useful for aliases.  If both
-files exist, the one in the home directory is read first and aliases defined there
-can be overridden by the local file.
-
-.. versionchanged:: 3.11
-   :file:`.pdbrc` is now read with ``'utf-8'`` encoding. Previously, it was read
-   with the system locale encoding.
+directory, it is read in and executed as if it had been typed at the debugger
+prompt.  This is particularly useful for aliases.  If both files exist, the one
+in the home directory is read first and aliases defined there can be overridden
+by the local file.
 
 .. versionchanged:: 3.2
    :file:`.pdbrc` can now contain commands that continue debugging, such as
@@ -542,7 +538,6 @@ can be overridden by the local file.
    executed in the current environment).
 
 .. pdbcommand:: retval
-
    Print the return value for the last return of a function.
 
 .. rubric:: Footnotes

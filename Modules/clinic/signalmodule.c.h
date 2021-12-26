@@ -2,42 +2,6 @@
 preserve
 [clinic start generated code]*/
 
-PyDoc_STRVAR(signal_default_int_handler__doc__,
-"default_int_handler($module, signalnum, frame, /)\n"
-"--\n"
-"\n"
-"The default handler for SIGINT installed by Python.\n"
-"\n"
-"It raises KeyboardInterrupt.");
-
-#define SIGNAL_DEFAULT_INT_HANDLER_METHODDEF    \
-    {"default_int_handler", (PyCFunction)(void(*)(void))signal_default_int_handler, METH_FASTCALL, signal_default_int_handler__doc__},
-
-static PyObject *
-signal_default_int_handler_impl(PyObject *module, int signalnum,
-                                PyObject *frame);
-
-static PyObject *
-signal_default_int_handler(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
-{
-    PyObject *return_value = NULL;
-    int signalnum;
-    PyObject *frame;
-
-    if (!_PyArg_CheckPositional("default_int_handler", nargs, 2, 2)) {
-        goto exit;
-    }
-    signalnum = _PyLong_AsInt(args[0]);
-    if (signalnum == -1 && PyErr_Occurred()) {
-        goto exit;
-    }
-    frame = args[1];
-    return_value = signal_default_int_handler_impl(module, signalnum, frame);
-
-exit:
-    return return_value;
-}
-
 #if defined(HAVE_ALARM)
 
 PyDoc_STRVAR(signal_alarm__doc__,
@@ -59,6 +23,11 @@ signal_alarm(PyObject *module, PyObject *arg)
     int seconds;
     long _return_value;
 
+    if (PyFloat_Check(arg)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "integer argument expected, got float" );
+        goto exit;
+    }
     seconds = _PyLong_AsInt(arg);
     if (seconds == -1 && PyErr_Occurred()) {
         goto exit;
@@ -115,6 +84,11 @@ signal_raise_signal(PyObject *module, PyObject *arg)
     PyObject *return_value = NULL;
     int signalnum;
 
+    if (PyFloat_Check(arg)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "integer argument expected, got float" );
+        goto exit;
+    }
     signalnum = _PyLong_AsInt(arg);
     if (signalnum == -1 && PyErr_Occurred()) {
         goto exit;
@@ -154,6 +128,11 @@ signal_signal(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if (!_PyArg_CheckPositional("signal", nargs, 2, 2)) {
         goto exit;
     }
+    if (PyFloat_Check(args[0])) {
+        PyErr_SetString(PyExc_TypeError,
+                        "integer argument expected, got float" );
+        goto exit;
+    }
     signalnum = _PyLong_AsInt(args[0]);
     if (signalnum == -1 && PyErr_Occurred()) {
         goto exit;
@@ -189,6 +168,11 @@ signal_getsignal(PyObject *module, PyObject *arg)
     PyObject *return_value = NULL;
     int signalnum;
 
+    if (PyFloat_Check(arg)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "integer argument expected, got float" );
+        goto exit;
+    }
     signalnum = _PyLong_AsInt(arg);
     if (signalnum == -1 && PyErr_Occurred()) {
         goto exit;
@@ -220,6 +204,11 @@ signal_strsignal(PyObject *module, PyObject *arg)
     PyObject *return_value = NULL;
     int signalnum;
 
+    if (PyFloat_Check(arg)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "integer argument expected, got float" );
+        goto exit;
+    }
     signalnum = _PyLong_AsInt(arg);
     if (signalnum == -1 && PyErr_Occurred()) {
         goto exit;
@@ -257,8 +246,18 @@ signal_siginterrupt(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if (!_PyArg_CheckPositional("siginterrupt", nargs, 2, 2)) {
         goto exit;
     }
+    if (PyFloat_Check(args[0])) {
+        PyErr_SetString(PyExc_TypeError,
+                        "integer argument expected, got float" );
+        goto exit;
+    }
     signalnum = _PyLong_AsInt(args[0]);
     if (signalnum == -1 && PyErr_Occurred()) {
+        goto exit;
+    }
+    if (PyFloat_Check(args[1])) {
+        PyErr_SetString(PyExc_TypeError,
+                        "integer argument expected, got float" );
         goto exit;
     }
     flag = _PyLong_AsInt(args[1]);
@@ -304,6 +303,11 @@ signal_setitimer(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if (!_PyArg_CheckPositional("setitimer", nargs, 2, 3)) {
         goto exit;
     }
+    if (PyFloat_Check(args[0])) {
+        PyErr_SetString(PyExc_TypeError,
+                        "integer argument expected, got float" );
+        goto exit;
+    }
     which = _PyLong_AsInt(args[0]);
     if (which == -1 && PyErr_Occurred()) {
         goto exit;
@@ -342,6 +346,11 @@ signal_getitimer(PyObject *module, PyObject *arg)
     PyObject *return_value = NULL;
     int which;
 
+    if (PyFloat_Check(arg)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "integer argument expected, got float" );
+        goto exit;
+    }
     which = _PyLong_AsInt(arg);
     if (which == -1 && PyErr_Occurred()) {
         goto exit;
@@ -354,7 +363,7 @@ exit:
 
 #endif /* defined(HAVE_GETITIMER) */
 
-#if defined(HAVE_SIGSET_T) && defined(PYPTHREAD_SIGMASK)
+#if defined(PYPTHREAD_SIGMASK)
 
 PyDoc_STRVAR(signal_pthread_sigmask__doc__,
 "pthread_sigmask($module, how, mask, /)\n"
@@ -378,6 +387,11 @@ signal_pthread_sigmask(PyObject *module, PyObject *const *args, Py_ssize_t nargs
     if (!_PyArg_CheckPositional("pthread_sigmask", nargs, 2, 2)) {
         goto exit;
     }
+    if (PyFloat_Check(args[0])) {
+        PyErr_SetString(PyExc_TypeError,
+                        "integer argument expected, got float" );
+        goto exit;
+    }
     how = _PyLong_AsInt(args[0]);
     if (how == -1 && PyErr_Occurred()) {
         goto exit;
@@ -391,9 +405,9 @@ exit:
     return return_value;
 }
 
-#endif /* defined(HAVE_SIGSET_T) && defined(PYPTHREAD_SIGMASK) */
+#endif /* defined(PYPTHREAD_SIGMASK) */
 
-#if defined(HAVE_SIGSET_T) && defined(HAVE_SIGPENDING)
+#if defined(HAVE_SIGPENDING)
 
 PyDoc_STRVAR(signal_sigpending__doc__,
 "sigpending($module, /)\n"
@@ -416,9 +430,9 @@ signal_sigpending(PyObject *module, PyObject *Py_UNUSED(ignored))
     return signal_sigpending_impl(module);
 }
 
-#endif /* defined(HAVE_SIGSET_T) && defined(HAVE_SIGPENDING) */
+#endif /* defined(HAVE_SIGPENDING) */
 
-#if defined(HAVE_SIGSET_T) && defined(HAVE_SIGWAIT)
+#if defined(HAVE_SIGWAIT)
 
 PyDoc_STRVAR(signal_sigwait__doc__,
 "sigwait($module, sigset, /)\n"
@@ -451,9 +465,9 @@ exit:
     return return_value;
 }
 
-#endif /* defined(HAVE_SIGSET_T) && defined(HAVE_SIGWAIT) */
+#endif /* defined(HAVE_SIGWAIT) */
 
-#if ((defined(HAVE_SIGFILLSET) && defined(HAVE_SIGSET_T)) || defined(MS_WINDOWS))
+#if (defined(HAVE_SIGFILLSET) || defined(MS_WINDOWS))
 
 PyDoc_STRVAR(signal_valid_signals__doc__,
 "valid_signals($module, /)\n"
@@ -476,9 +490,9 @@ signal_valid_signals(PyObject *module, PyObject *Py_UNUSED(ignored))
     return signal_valid_signals_impl(module);
 }
 
-#endif /* ((defined(HAVE_SIGFILLSET) && defined(HAVE_SIGSET_T)) || defined(MS_WINDOWS)) */
+#endif /* (defined(HAVE_SIGFILLSET) || defined(MS_WINDOWS)) */
 
-#if defined(HAVE_SIGSET_T) && defined(HAVE_SIGWAITINFO)
+#if defined(HAVE_SIGWAITINFO)
 
 PyDoc_STRVAR(signal_sigwaitinfo__doc__,
 "sigwaitinfo($module, sigset, /)\n"
@@ -509,9 +523,9 @@ exit:
     return return_value;
 }
 
-#endif /* defined(HAVE_SIGSET_T) && defined(HAVE_SIGWAITINFO) */
+#endif /* defined(HAVE_SIGWAITINFO) */
 
-#if defined(HAVE_SIGSET_T) && defined(HAVE_SIGTIMEDWAIT)
+#if defined(HAVE_SIGTIMEDWAIT)
 
 PyDoc_STRVAR(signal_sigtimedwait__doc__,
 "sigtimedwait($module, sigset, timeout, /)\n"
@@ -548,7 +562,7 @@ exit:
     return return_value;
 }
 
-#endif /* defined(HAVE_SIGSET_T) && defined(HAVE_SIGTIMEDWAIT) */
+#endif /* defined(HAVE_SIGTIMEDWAIT) */
 
 #if defined(HAVE_PTHREAD_KILL)
 
@@ -580,6 +594,11 @@ signal_pthread_kill(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
         goto exit;
     }
     thread_id = PyLong_AsUnsignedLongMask(args[0]);
+    if (PyFloat_Check(args[1])) {
+        PyErr_SetString(PyExc_TypeError,
+                        "integer argument expected, got float" );
+        goto exit;
+    }
     signalnum = _PyLong_AsInt(args[1]);
     if (signalnum == -1 && PyErr_Occurred()) {
         goto exit;
@@ -619,8 +638,18 @@ signal_pidfd_send_signal(PyObject *module, PyObject *const *args, Py_ssize_t nar
     if (!_PyArg_CheckPositional("pidfd_send_signal", nargs, 2, 4)) {
         goto exit;
     }
+    if (PyFloat_Check(args[0])) {
+        PyErr_SetString(PyExc_TypeError,
+                        "integer argument expected, got float" );
+        goto exit;
+    }
     pidfd = _PyLong_AsInt(args[0]);
     if (pidfd == -1 && PyErr_Occurred()) {
+        goto exit;
+    }
+    if (PyFloat_Check(args[1])) {
+        PyErr_SetString(PyExc_TypeError,
+                        "integer argument expected, got float" );
         goto exit;
     }
     signalnum = _PyLong_AsInt(args[1]);
@@ -633,6 +662,11 @@ signal_pidfd_send_signal(PyObject *module, PyObject *const *args, Py_ssize_t nar
     siginfo = args[2];
     if (nargs < 4) {
         goto skip_optional;
+    }
+    if (PyFloat_Check(args[3])) {
+        PyErr_SetString(PyExc_TypeError,
+                        "integer argument expected, got float" );
+        goto exit;
     }
     flags = _PyLong_AsInt(args[3]);
     if (flags == -1 && PyErr_Occurred()) {
@@ -698,4 +732,4 @@ exit:
 #ifndef SIGNAL_PIDFD_SEND_SIGNAL_METHODDEF
     #define SIGNAL_PIDFD_SEND_SIGNAL_METHODDEF
 #endif /* !defined(SIGNAL_PIDFD_SEND_SIGNAL_METHODDEF) */
-/*[clinic end generated code: output=c353e686367bc384 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=b41b4b6bd9ad4da2 input=a9049054013a1b77]*/

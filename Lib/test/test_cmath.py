@@ -1,4 +1,4 @@
-from test.support import requires_IEEE_754, cpython_only, import_helper
+from test.support import requires_IEEE_754, cpython_only
 from test.test_math import parse_testfile, test_file
 import test.test_math as test_math
 import unittest
@@ -60,7 +60,7 @@ class CMathTests(unittest.TestCase):
     test_functions.append(lambda x : cmath.log(14.-27j, x))
 
     def setUp(self):
-        self.test_values = open(test_file, encoding="utf-8")
+        self.test_values = open(test_file)
 
     def tearDown(self):
         self.test_values.close()
@@ -452,13 +452,13 @@ class CMathTests(unittest.TestCase):
     @cpython_only
     def test_polar_errno(self):
         # Issue #24489: check a previously set C errno doesn't disturb polar()
-        _testcapi = import_helper.import_module('_testcapi')
+        from _testcapi import set_errno
         def polar_with_errno_set(z):
-            _testcapi.set_errno(11)
+            set_errno(11)
             try:
                 return polar(z)
             finally:
-                _testcapi.set_errno(0)
+                set_errno(0)
         self.check_polar(polar_with_errno_set)
 
     def test_phase(self):

@@ -76,7 +76,7 @@ class InstallScriptsTestCase(support.TempdirManager,
 
 
 def test_suite():
-    return unittest.TestLoader().loadTestsFromTestCase(InstallScriptsTestCase)
+    return unittest.makeSuite(InstallScriptsTestCase)
 
 if __name__ == "__main__":
     run_unittest(test_suite())

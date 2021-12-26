@@ -59,31 +59,21 @@ def spawn(cmd, search_path=1, verbose=0, dry_run=0):
             if _cfg_target:
                 _cfg_target_split = [int(x) for x in _cfg_target.split('.')]
         if _cfg_target:
-            # Ensure that the deployment target of the build process is not
-            # less than 10.3 if the interpreter was built for 10.3 or later.
-            # This ensures extension modules are built with correct
-            # compatibility values, specifically LDSHARED which can use
-            # '-undefined dynamic_lookup' which only works on >= 10.3.
+            # ensure that the deployment target of build process is not less
+            # than that used when the interpreter was built. This ensures
+            # extension modules are built with correct compatibility values
             cur_target = os.environ.get('MACOSX_DEPLOYMENT_TARGET', _cfg_target)
-            cur_target_split = [int(x) for x in cur_target.split('.')]
-            if _cfg_target_split[:2] >= [10, 3] and cur_target_split[:2] < [10, 3]:
+            if _cfg_target_split > [int(x) for x in cur_target.split('.')]:
                 my_msg = ('$MACOSX_DEPLOYMENT_TARGET mismatch: '
-                          'now "%s" but "%s" during configure;'
-                          'must use 10.3 or later'
+                          'now "%s" but "%s" during configure'
                                 % (cur_target, _cfg_target))
                 raise DistutilsPlatformError(my_msg)
             env = dict(os.environ,
                        MACOSX_DEPLOYMENT_TARGET=cur_target)
 
-    try:
-        proc = subprocess.Popen(cmd, env=env)
-        proc.wait()
-        exitcode = proc.returncode
-    except OSError as exc:
-        if not DEBUG:
-            cmd = cmd[0]
-        raise DistutilsExecError(
-            "command %r failed: %s" % (cmd, exc.args[-1])) from exc
+    proc = subprocess.Popen(cmd, env=env)
+    proc.wait()
+    exitcode = proc.returncode
 
     if exitcode:
         if not DEBUG:

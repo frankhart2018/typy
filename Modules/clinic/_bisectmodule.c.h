@@ -3,14 +3,14 @@ preserve
 [clinic start generated code]*/
 
 PyDoc_STRVAR(_bisect_bisect_right__doc__,
-"bisect_right($module, /, a, x, lo=0, hi=None, *, key=None)\n"
+"bisect_right($module, /, a, x, lo=0, hi=None)\n"
 "--\n"
 "\n"
 "Return the index where to insert item x in list a, assuming a is sorted.\n"
 "\n"
 "The return value i is such that all e in a[:i] have e <= x, and all e in\n"
-"a[i:] have e > x.  So if x already appears in the list, a.insert(i, x) will\n"
-"insert just after the rightmost x already there.\n"
+"a[i:] have e > x.  So if x already appears in the list, i points just\n"
+"beyond the rightmost x already there\n"
 "\n"
 "Optional args lo (default 0) and hi (default len(a)) bound the\n"
 "slice of a to be searched.");
@@ -20,21 +20,20 @@ PyDoc_STRVAR(_bisect_bisect_right__doc__,
 
 static Py_ssize_t
 _bisect_bisect_right_impl(PyObject *module, PyObject *a, PyObject *x,
-                          Py_ssize_t lo, Py_ssize_t hi, PyObject *key);
+                          Py_ssize_t lo, Py_ssize_t hi);
 
 static PyObject *
 _bisect_bisect_right(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     PyObject *return_value = NULL;
-    static const char * const _keywords[] = {"a", "x", "lo", "hi", "key", NULL};
+    static const char * const _keywords[] = {"a", "x", "lo", "hi", NULL};
     static _PyArg_Parser _parser = {NULL, _keywords, "bisect_right", 0};
-    PyObject *argsbuf[5];
+    PyObject *argsbuf[4];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
     PyObject *a;
     PyObject *x;
     Py_ssize_t lo = 0;
     Py_ssize_t hi = -1;
-    PyObject *key = Py_None;
     Py_ssize_t _return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser, 2, 4, 0, argsbuf);
@@ -47,9 +46,14 @@ _bisect_bisect_right(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
         goto skip_optional_pos;
     }
     if (args[2]) {
+        if (PyFloat_Check(args[2])) {
+            PyErr_SetString(PyExc_TypeError,
+                            "integer argument expected, got float" );
+            goto exit;
+        }
         {
             Py_ssize_t ival = -1;
-            PyObject *iobj = _PyNumber_Index(args[2]);
+            PyObject *iobj = PyNumber_Index(args[2]);
             if (iobj != NULL) {
                 ival = PyLong_AsSsize_t(iobj);
                 Py_DECREF(iobj);
@@ -63,21 +67,11 @@ _bisect_bisect_right(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
             goto skip_optional_pos;
         }
     }
-    if (args[3]) {
-        if (!_Py_convert_optional_to_ssize_t(args[3], &hi)) {
-            goto exit;
-        }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (!_Py_convert_optional_to_ssize_t(args[3], &hi)) {
+        goto exit;
     }
 skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    key = args[4];
-skip_optional_kwonly:
-    _return_value = _bisect_bisect_right_impl(module, a, x, lo, hi, key);
+    _return_value = _bisect_bisect_right_impl(module, a, x, lo, hi);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
@@ -88,7 +82,7 @@ exit:
 }
 
 PyDoc_STRVAR(_bisect_insort_right__doc__,
-"insort_right($module, /, a, x, lo=0, hi=None, *, key=None)\n"
+"insort_right($module, /, a, x, lo=0, hi=None)\n"
 "--\n"
 "\n"
 "Insert item x in list a, and keep it sorted assuming a is sorted.\n"
@@ -103,21 +97,20 @@ PyDoc_STRVAR(_bisect_insort_right__doc__,
 
 static PyObject *
 _bisect_insort_right_impl(PyObject *module, PyObject *a, PyObject *x,
-                          Py_ssize_t lo, Py_ssize_t hi, PyObject *key);
+                          Py_ssize_t lo, Py_ssize_t hi);
 
 static PyObject *
 _bisect_insort_right(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     PyObject *return_value = NULL;
-    static const char * const _keywords[] = {"a", "x", "lo", "hi", "key", NULL};
+    static const char * const _keywords[] = {"a", "x", "lo", "hi", NULL};
     static _PyArg_Parser _parser = {NULL, _keywords, "insort_right", 0};
-    PyObject *argsbuf[5];
+    PyObject *argsbuf[4];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
     PyObject *a;
     PyObject *x;
     Py_ssize_t lo = 0;
     Py_ssize_t hi = -1;
-    PyObject *key = Py_None;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser, 2, 4, 0, argsbuf);
     if (!args) {
@@ -129,9 +122,14 @@ _bisect_insort_right(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
         goto skip_optional_pos;
     }
     if (args[2]) {
+        if (PyFloat_Check(args[2])) {
+            PyErr_SetString(PyExc_TypeError,
+                            "integer argument expected, got float" );
+            goto exit;
+        }
         {
             Py_ssize_t ival = -1;
-            PyObject *iobj = _PyNumber_Index(args[2]);
+            PyObject *iobj = PyNumber_Index(args[2]);
             if (iobj != NULL) {
                 ival = PyLong_AsSsize_t(iobj);
                 Py_DECREF(iobj);
@@ -145,35 +143,25 @@ _bisect_insort_right(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
             goto skip_optional_pos;
         }
     }
-    if (args[3]) {
-        if (!_Py_convert_optional_to_ssize_t(args[3], &hi)) {
-            goto exit;
-        }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (!_Py_convert_optional_to_ssize_t(args[3], &hi)) {
+        goto exit;
     }
 skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    key = args[4];
-skip_optional_kwonly:
-    return_value = _bisect_insort_right_impl(module, a, x, lo, hi, key);
+    return_value = _bisect_insort_right_impl(module, a, x, lo, hi);
 
 exit:
     return return_value;
 }
 
 PyDoc_STRVAR(_bisect_bisect_left__doc__,
-"bisect_left($module, /, a, x, lo=0, hi=None, *, key=None)\n"
+"bisect_left($module, /, a, x, lo=0, hi=None)\n"
 "--\n"
 "\n"
 "Return the index where to insert item x in list a, assuming a is sorted.\n"
 "\n"
 "The return value i is such that all e in a[:i] have e < x, and all e in\n"
-"a[i:] have e >= x.  So if x already appears in the list, a.insert(i, x) will\n"
-"insert just before the leftmost x already there.\n"
+"a[i:] have e >= x.  So if x already appears in the list, i points just\n"
+"before the leftmost x already there.\n"
 "\n"
 "Optional args lo (default 0) and hi (default len(a)) bound the\n"
 "slice of a to be searched.");
@@ -183,21 +171,20 @@ PyDoc_STRVAR(_bisect_bisect_left__doc__,
 
 static Py_ssize_t
 _bisect_bisect_left_impl(PyObject *module, PyObject *a, PyObject *x,
-                         Py_ssize_t lo, Py_ssize_t hi, PyObject *key);
+                         Py_ssize_t lo, Py_ssize_t hi);
 
 static PyObject *
 _bisect_bisect_left(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     PyObject *return_value = NULL;
-    static const char * const _keywords[] = {"a", "x", "lo", "hi", "key", NULL};
+    static const char * const _keywords[] = {"a", "x", "lo", "hi", NULL};
     static _PyArg_Parser _parser = {NULL, _keywords, "bisect_left", 0};
-    PyObject *argsbuf[5];
+    PyObject *argsbuf[4];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
     PyObject *a;
     PyObject *x;
     Py_ssize_t lo = 0;
     Py_ssize_t hi = -1;
-    PyObject *key = Py_None;
     Py_ssize_t _return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser, 2, 4, 0, argsbuf);
@@ -210,9 +197,14 @@ _bisect_bisect_left(PyObject *module, PyObject *const *args, Py_ssize_t nargs, P
         goto skip_optional_pos;
     }
     if (args[2]) {
+        if (PyFloat_Check(args[2])) {
+            PyErr_SetString(PyExc_TypeError,
+                            "integer argument expected, got float" );
+            goto exit;
+        }
         {
             Py_ssize_t ival = -1;
-            PyObject *iobj = _PyNumber_Index(args[2]);
+            PyObject *iobj = PyNumber_Index(args[2]);
             if (iobj != NULL) {
                 ival = PyLong_AsSsize_t(iobj);
                 Py_DECREF(iobj);
@@ -226,21 +218,11 @@ _bisect_bisect_left(PyObject *module, PyObject *const *args, Py_ssize_t nargs, P
             goto skip_optional_pos;
         }
     }
-    if (args[3]) {
-        if (!_Py_convert_optional_to_ssize_t(args[3], &hi)) {
-            goto exit;
-        }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (!_Py_convert_optional_to_ssize_t(args[3], &hi)) {
+        goto exit;
     }
 skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    key = args[4];
-skip_optional_kwonly:
-    _return_value = _bisect_bisect_left_impl(module, a, x, lo, hi, key);
+    _return_value = _bisect_bisect_left_impl(module, a, x, lo, hi);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
@@ -251,7 +233,7 @@ exit:
 }
 
 PyDoc_STRVAR(_bisect_insort_left__doc__,
-"insort_left($module, /, a, x, lo=0, hi=None, *, key=None)\n"
+"insort_left($module, /, a, x, lo=0, hi=None)\n"
 "--\n"
 "\n"
 "Insert item x in list a, and keep it sorted assuming a is sorted.\n"
@@ -266,21 +248,20 @@ PyDoc_STRVAR(_bisect_insort_left__doc__,
 
 static PyObject *
 _bisect_insort_left_impl(PyObject *module, PyObject *a, PyObject *x,
-                         Py_ssize_t lo, Py_ssize_t hi, PyObject *key);
+                         Py_ssize_t lo, Py_ssize_t hi);
 
 static PyObject *
 _bisect_insort_left(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     PyObject *return_value = NULL;
-    static const char * const _keywords[] = {"a", "x", "lo", "hi", "key", NULL};
+    static const char * const _keywords[] = {"a", "x", "lo", "hi", NULL};
     static _PyArg_Parser _parser = {NULL, _keywords, "insort_left", 0};
-    PyObject *argsbuf[5];
+    PyObject *argsbuf[4];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
     PyObject *a;
     PyObject *x;
     Py_ssize_t lo = 0;
     Py_ssize_t hi = -1;
-    PyObject *key = Py_None;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser, 2, 4, 0, argsbuf);
     if (!args) {
@@ -292,9 +273,14 @@ _bisect_insort_left(PyObject *module, PyObject *const *args, Py_ssize_t nargs, P
         goto skip_optional_pos;
     }
     if (args[2]) {
+        if (PyFloat_Check(args[2])) {
+            PyErr_SetString(PyExc_TypeError,
+                            "integer argument expected, got float" );
+            goto exit;
+        }
         {
             Py_ssize_t ival = -1;
-            PyObject *iobj = _PyNumber_Index(args[2]);
+            PyObject *iobj = PyNumber_Index(args[2]);
             if (iobj != NULL) {
                 ival = PyLong_AsSsize_t(iobj);
                 Py_DECREF(iobj);
@@ -308,23 +294,13 @@ _bisect_insort_left(PyObject *module, PyObject *const *args, Py_ssize_t nargs, P
             goto skip_optional_pos;
         }
     }
-    if (args[3]) {
-        if (!_Py_convert_optional_to_ssize_t(args[3], &hi)) {
-            goto exit;
-        }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (!_Py_convert_optional_to_ssize_t(args[3], &hi)) {
+        goto exit;
     }
 skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    key = args[4];
-skip_optional_kwonly:
-    return_value = _bisect_insort_left_impl(module, a, x, lo, hi, key);
+    return_value = _bisect_insort_left_impl(module, a, x, lo, hi);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=aeb97db6db79bf96 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=bcbd6c77331a08f0 input=a9049054013a1b77]*/

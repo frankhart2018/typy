@@ -6,7 +6,7 @@ import os
 import sys
 import tempfile
 import unittest
-from test.support import os_helper
+from test import support
 
 if sys.platform != 'win32':
     raise unittest.SkipTest("test only relevant on win32")
@@ -92,11 +92,9 @@ class WindowsConsoleIOTests(unittest.TestCase):
         f.close()
         f.close()
 
-        # bpo-45354: Windows 11 changed MS-DOS device name handling
-        if sys.getwindowsversion()[:3] < (10, 0, 22000):
-            f = open('C:/con', 'rb', buffering=0)
-            self.assertIsInstance(f, ConIO)
-            f.close()
+        f = open('C:/con', 'rb', buffering=0)
+        self.assertIsInstance(f, ConIO)
+        f.close()
 
     @unittest.skipIf(sys.getwindowsversion()[:2] <= (6, 1),
         "test does not work on Windows 7 and earlier")
@@ -111,13 +109,12 @@ class WindowsConsoleIOTests(unittest.TestCase):
 
     def test_conout_path(self):
         temp_path = tempfile.mkdtemp()
-        self.addCleanup(os_helper.rmtree, temp_path)
+        self.addCleanup(support.rmtree, temp_path)
 
         conout_path = os.path.join(temp_path, 'CONOUT$')
 
         with open(conout_path, 'wb', buffering=0) as f:
-            # bpo-45354: Windows 11 changed MS-DOS device name handling
-            if (6, 1) < sys.getwindowsversion()[:3] < (10, 0, 22000):
+            if sys.getwindowsversion()[:2] > (6, 1):
                 self.assertIsInstance(f, ConIO)
             else:
                 self.assertNotIsInstance(f, ConIO)

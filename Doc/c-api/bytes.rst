@@ -25,13 +25,13 @@ called with a non-bytes parameter.
 .. c:function:: int PyBytes_Check(PyObject *o)
 
    Return true if the object *o* is a bytes object or an instance of a subtype
-   of the bytes type.  This function always succeeds.
+   of the bytes type.
 
 
 .. c:function:: int PyBytes_CheckExact(PyObject *o)
 
    Return true if the object *o* is a bytes object, but not an instance of a
-   subtype of the bytes type.  This function always succeeds.
+   subtype of the bytes type.
 
 
 .. c:function:: PyObject* PyBytes_FromString(const char *v)

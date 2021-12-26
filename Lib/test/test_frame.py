@@ -1,5 +1,4 @@
 import re
-import sys
 import types
 import unittest
 import weakref
@@ -44,19 +43,6 @@ class ClearTest(unittest.TestCase):
         support.gc_collect()
         # The reference was released by .clear()
         self.assertIs(None, wr())
-
-    def test_clear_does_not_clear_specials(self):
-        class C:
-            pass
-        c = C()
-        exc = self.outer(c=c)
-        del c
-        f = exc.__traceback__.tb_frame
-        f.clear()
-        self.assertIsNot(f.f_code, None)
-        self.assertIsNot(f.f_locals, None)
-        self.assertIsNot(f.f_builtins, None)
-        self.assertIsNot(f.f_globals, None)
 
     def test_clear_generator(self):
         endly = False
@@ -107,26 +93,6 @@ class ClearTest(unittest.TestCase):
         # Clearing the frame closes the generator
         f.clear()
         self.assertTrue(endly)
-
-    def test_lineno_with_tracing(self):
-        def record_line():
-            f = sys._getframe(1)
-            lines.append(f.f_lineno-f.f_code.co_firstlineno)
-
-        def test(trace):
-            record_line()
-            if trace:
-                sys._getframe(0).f_trace = True
-            record_line()
-            record_line()
-
-        expected_lines = [1, 4, 5]
-        lines = []
-        test(False)
-        self.assertEqual(lines, expected_lines)
-        lines = []
-        test(True)
-        self.assertEqual(lines, expected_lines)
 
     @support.cpython_only
     def test_clear_refcycles(self):

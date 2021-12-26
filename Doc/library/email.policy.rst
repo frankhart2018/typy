@@ -210,7 +210,7 @@ added matters.  To illustrate::
       :meth:`register_defect` method.
 
 
-   .. attribute:: mangle_from_
+   .. attribute:: mangle_from\_
 
       If :const:`True`, lines starting with *"From "* in the body are
       escaped by putting a ``>`` in front of them. This parameter is used when

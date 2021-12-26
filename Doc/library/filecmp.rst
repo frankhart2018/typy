@@ -22,11 +22,8 @@ The :mod:`filecmp` module defines the following functions:
    Compare the files named *f1* and *f2*, returning ``True`` if they seem equal,
    ``False`` otherwise.
 
-   If *shallow* is true and the :func:`os.stat` signatures (file type, size, and
-   modification time) of both files are identical, the files are taken to be
-   equal.
-
-   Otherwise, the files are treated as different if their sizes or contents differ.
+   If *shallow* is true, files with identical :func:`os.stat` signatures are
+   taken to be equal.  Otherwise, the contents of the files are compared.
 
    Note that no external programs are called from this function, giving it
    portability and efficiency.
@@ -176,13 +173,7 @@ The :class:`dircmp` class
    .. attribute:: subdirs
 
       A dictionary mapping names in :attr:`common_dirs` to :class:`dircmp`
-      instances (or MyDirCmp instances if this instance is of type MyDirCmp, a
-      subclass of :class:`dircmp`).
-
-      .. versionchanged:: 3.10
-         Previously entries were always :class:`dircmp` instances. Now entries
-         are the same type as *self*, if *self* is a subclass of
-         :class:`dircmp`.
+      objects.
 
 .. attribute:: DEFAULT_IGNORES
 

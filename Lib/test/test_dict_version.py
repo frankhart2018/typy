@@ -1,12 +1,12 @@
 """
-Test implementation of the PEP 509: dictionary versioning.
+Test implementation of the PEP 509: dictionary versionning.
 """
 import unittest
-from test.support import import_helper
+from test import support
 
 # PEP 509 is implemented in CPython but other Python implementations
 # don't require to implement it
-_testcapi = import_helper.import_module('_testcapi')
+_testcapi = support.import_module('_testcapi')
 
 
 class DictVersionTests(unittest.TestCase):

@@ -558,7 +558,9 @@ class different_locale:
 class LocaleTextCalendar(TextCalendar):
     """
     This class can be passed a locale name in the constructor and will return
-    month and weekday names in the specified locale.
+    month and weekday names in the specified locale. If this locale includes
+    an encoding all strings containing month and weekday names will be returned
+    as unicode.
     """
 
     def __init__(self, firstweekday=0, locale=None):
@@ -569,17 +571,27 @@ class LocaleTextCalendar(TextCalendar):
 
     def formatweekday(self, day, width):
         with different_locale(self.locale):
-            return super().formatweekday(day, width)
+            if width >= 9:
+                names = day_name
+            else:
+                names = day_abbr
+            name = names[day]
+            return name[:width].center(width)
 
     def formatmonthname(self, theyear, themonth, width, withyear=True):
         with different_locale(self.locale):
-            return super().formatmonthname(theyear, themonth, width, withyear)
+            s = month_name[themonth]
+            if withyear:
+                s = "%s %r" % (s, theyear)
+            return s.center(width)
 
 
 class LocaleHTMLCalendar(HTMLCalendar):
     """
     This class can be passed a locale name in the constructor and will return
-    month and weekday names in the specified locale.
+    month and weekday names in the specified locale. If this locale includes
+    an encoding all strings containing month and weekday names will be returned
+    as unicode.
     """
     def __init__(self, firstweekday=0, locale=None):
         HTMLCalendar.__init__(self, firstweekday)
@@ -589,11 +601,16 @@ class LocaleHTMLCalendar(HTMLCalendar):
 
     def formatweekday(self, day):
         with different_locale(self.locale):
-            return super().formatweekday(day)
+            s = day_abbr[day]
+            return '<th class="%s">%s</th>' % (self.cssclasses[day], s)
 
     def formatmonthname(self, theyear, themonth, withyear=True):
         with different_locale(self.locale):
-            return super().formatmonthname(theyear, themonth, withyear)
+            s = month_name[themonth]
+            if withyear:
+                s = '%s %s' % (s, theyear)
+            return '<tr><th colspan="7" class="month">%s</th></tr>' % s
+
 
 # Support for old module level interface
 c = TextCalendar()

@@ -13,6 +13,7 @@ the example.  It should be ignored:
 
 import sys
 import unittest
+from test import support
 if sys.flags.optimize >= 2:
     raise unittest.SkipTest("Cannot test docstrings with -O2")
 
@@ -106,21 +107,17 @@ class C(object):
         """
         return val
 
-
-class Test(unittest.TestCase):
-    def test_testmod(self):
-        import doctest, sys
-        EXPECTED = 19
-        f, t = doctest.testmod(sys.modules[__name__])
-        if f:
-            self.fail("%d of %d doctests failed" % (f, t))
-        if t != EXPECTED:
-            self.fail("expected %d tests to run, not %d" % (EXPECTED, t))
-
+def test_main():
+    from test import test_doctest2
+    EXPECTED = 19
+    f, t = support.run_doctest(test_doctest2)
+    if t != EXPECTED:
+        raise support.TestFailed("expected %d tests to run, not %d" %
+                                      (EXPECTED, t))
 
 # Pollute the namespace with a bunch of imported functions and classes,
 # to make sure they don't get tested.
 from doctest import *
 
 if __name__ == '__main__':
-    unittest.main()
+    test_main()

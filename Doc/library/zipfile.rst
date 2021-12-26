@@ -78,6 +78,7 @@ The module defines the following items:
    of the last modification to the file; the fields are described in section
    :ref:`zipinfo-objects`.
 
+
 .. function:: is_zipfile(filename)
 
    Returns ``True`` if *filename* is a valid ZIP file based on its magic number,
@@ -405,11 +406,6 @@ ZipFile Objects
       If ``arcname`` (or ``filename``, if ``arcname`` is  not given) contains a null
       byte, the name of the file in the archive will be truncated at the null byte.
 
-   .. note::
-
-      A leading slash in the filename may lead to the archive being impossible to
-      open in some zip programs on Windows systems.
-
    .. versionchanged:: 3.6
       Calling :meth:`write` on a ZipFile created with mode ``'r'`` or
       a closed ZipFile will raise a :exc:`ValueError`.  Previously,
@@ -487,7 +483,7 @@ Path Objects
 Path objects expose the following features of :mod:`pathlib.Path`
 objects:
 
-Path objects are traversable using the ``/`` operator or ``joinpath``.
+Path objects are traversable using the ``/`` operator.
 
 .. attribute:: Path.name
 
@@ -525,27 +521,6 @@ Path objects are traversable using the ``/`` operator or ``joinpath``.
    Return ``True`` if the current context references a file or
    directory in the zip file.
 
-.. data:: Path.suffix
-
-   The file extension of the final component.
-
-   .. versionadded:: 3.11
-      Added :data:`Path.suffix` property.
-
-.. data:: Path.stem
-
-   The final path component, without its suffix.
-
-   .. versionadded:: 3.11
-      Added :data:`Path.stem` property.
-
-.. data:: Path.suffixes
-
-   A list of the path’s file extensions.
-
-   .. versionadded:: 3.11
-      Added :data:`Path.suffixes` property.
-
 .. method:: Path.read_text(*, **)
 
    Read the current file as unicode text. Positional and
@@ -557,23 +532,6 @@ Path objects are traversable using the ``/`` operator or ``joinpath``.
 
    Read the current file as bytes.
 
-.. method:: Path.joinpath(*other)
-
-   Return a new Path object with each of the *other* arguments
-   joined. The following are equivalent::
-
-   >>> Path(...).joinpath('child').joinpath('grandchild')
-   >>> Path(...).joinpath('child', 'grandchild')
-   >>> Path(...) / 'child' / 'grandchild'
-
-   .. versionchanged:: 3.10
-      Prior to 3.10, ``joinpath`` was undocumented and accepted
-      exactly one parameter.
-
-The `zipp <https://pypi.org/project/zipp>`_ project provides backports
-of the latest path object functionality to older Pythons. Use
-``zipp.Path`` in place of ``zipfile.Path`` for early access to
-changes.
 
 .. _pyzipfile-objects:
 
@@ -885,8 +843,6 @@ File System limitations
 Exceeding limitations on different file systems can cause decompression failed.
 Such as allowable characters in the directory entries, length of the file name,
 length of the pathname, size of a single file, and number of files, etc.
-
-.. _zipfile-resources-limitations:
 
 Resources limitations
 ~~~~~~~~~~~~~~~~~~~~~

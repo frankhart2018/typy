@@ -28,31 +28,28 @@ install the tools into there.
 Using make
 ----------
 
-To get started on UNIX, you can create a virtual environment and build
-documentation with the commands::
+To get started on UNIX, you can create a virtual environment with the command ::
 
   make venv
+
+That will install all the tools necessary to build the documentation. Assuming
+the virtual environment was created in the ``venv`` directory (the default;
+configurable with the VENVDIR variable), you can run the following command to
+build the HTML output files::
+
   make html
 
-The virtual environment in the ``venv`` directory will contain all the tools
-necessary to build the documentation downloaded and installed from PyPI.
-If you'd like to create the virtual environment in a different location,
-you can specify it using the ``VENVDIR`` variable.
-
-You can also skip creating the virtual environment altogether, in which case
-the Makefile will look for instances of ``sphinxbuild`` and ``blurb``
-installed on your process ``PATH`` (configurable with the ``SPHINXBUILD`` and
-``BLURB`` variables).
+By default, if the virtual environment is not created, the Makefile will
+look for instances of sphinxbuild and blurb installed on your process PATH
+(configurable with the SPHINXBUILD and BLURB variables).
 
 On Windows, we try to emulate the Makefile as closely as possible with a
 ``make.bat`` file. If you need to specify the Python interpreter to use,
-set the PYTHON environment variable.
+set the PYTHON environment variable instead.
 
 Available make targets are:
 
-* "clean", which removes all build files and the virtual environment.
-
-* "clean-venv", which removes the virtual environment directory.
+* "clean", which removes all build files.
 
 * "venv", which creates a virtual environment with all necessary tools
   installed.

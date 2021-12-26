@@ -42,9 +42,6 @@ get_encoded_name(PyObject *name, const char **hook_prefix) {
 
     /* Get the short name (substring after last dot) */
     name_len = PyUnicode_GetLength(name);
-    if (name_len < 0) {
-        return NULL;
-    }
     lastdot = PyUnicode_FindChar(name, '.', 0, name_len, -1);
     if (lastdot < -1) {
         return NULL;
@@ -124,7 +121,7 @@ _PyImport_LoadDynamicModuleWithSpec(PyObject *spec, FILE *fp)
 
     if (PySys_Audit("import", "OOOOO", name_unicode, path,
                     Py_None, Py_None, Py_None) < 0) {
-        goto error;
+        return NULL;
     }
 
 #ifdef MS_WINDOWS
@@ -207,7 +204,7 @@ _PyImport_LoadDynamicModuleWithSpec(PyObject *spec, FILE *fp)
         /* don't allow legacy init for non-ASCII module names */
         PyErr_Format(
             PyExc_SystemError,
-            "initialization of %s did not return PyModuleDef",
+            "initialization of * did not return PyModuleDef",
             name_buf);
         goto error;
     }
@@ -223,9 +220,10 @@ _PyImport_LoadDynamicModuleWithSpec(PyObject *spec, FILE *fp)
     def->m_base.m_init = p0;
 
     /* Remember the filename as the __file__ attribute */
-    if (PyModule_AddObjectRef(m, "__file__", path) < 0) {
+    if (PyModule_AddObject(m, "__file__", path) < 0)
         PyErr_Clear(); /* Not important enough to report */
-    }
+    else
+        Py_INCREF(path);
 
     PyObject *modules = PyImport_GetModuleDict();
     if (_PyImport_FixupExtensionObject(m, name_unicode, path, modules) < 0)

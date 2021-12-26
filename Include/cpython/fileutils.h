@@ -32,9 +32,6 @@ PyAPI_FUNC(int) _Py_EncodeLocaleEx(
     int current_locale,
     _Py_error_handler errors);
 
-PyAPI_FUNC(char*) _Py_EncodeLocaleRaw(
-    const wchar_t *text,
-    size_t *error_pos);
 
 PyAPI_FUNC(PyObject *) _Py_device_encoding(int);
 
@@ -98,6 +95,10 @@ PyAPI_FUNC(FILE *) _Py_wfopen(
     const wchar_t *path,
     const wchar_t *mode);
 
+PyAPI_FUNC(FILE*) _Py_fopen(
+    const char *pathname,
+    const char *mode);
+
 PyAPI_FUNC(FILE*) _Py_fopen_obj(
     PyObject *path,
     const char *mode);
@@ -135,6 +136,12 @@ PyAPI_FUNC(wchar_t*) _Py_wrealpath(
     size_t resolved_path_len);
 #endif
 
+#ifndef MS_WINDOWS
+PyAPI_FUNC(int) _Py_isabs(const wchar_t *path);
+#endif
+
+PyAPI_FUNC(int) _Py_abspath(const wchar_t *path, wchar_t **abspath_p);
+
 PyAPI_FUNC(wchar_t*) _Py_wgetcwd(
     wchar_t *buf,
     /* Number of characters of 'buf' buffer
@@ -155,12 +162,4 @@ PyAPI_FUNC(int) _Py_dup(int fd);
 PyAPI_FUNC(int) _Py_get_blocking(int fd);
 
 PyAPI_FUNC(int) _Py_set_blocking(int fd, int blocking);
-#else   /* MS_WINDOWS */
-PyAPI_FUNC(void*) _Py_get_osfhandle_noraise(int fd);
-
-PyAPI_FUNC(void*) _Py_get_osfhandle(int fd);
-
-PyAPI_FUNC(int) _Py_open_osfhandle_noraise(void *handle, int flags);
-
-PyAPI_FUNC(int) _Py_open_osfhandle(void *handle, int flags);
-#endif  /* MS_WINDOWS */
+#endif   /* !MS_WINDOWS */

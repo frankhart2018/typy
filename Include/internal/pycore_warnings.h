@@ -17,11 +17,7 @@ struct _warnings_runtime_state {
     long filters_version;
 };
 
-extern int _PyWarnings_InitState(PyInterpreterState *interp);
-
-PyAPI_FUNC(PyObject*) _PyWarnings_Init(void);
-
-extern void _PyErr_WarnUnawaitedCoroutine(PyObject *coro);
+extern PyStatus _PyWarnings_InitState(PyThreadState *tstate);
 
 #ifdef __cplusplus
 }

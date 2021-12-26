@@ -3,12 +3,9 @@
 #include "pycore_pymem.h"         // _Py_tracemalloc_config
 #include "pycore_traceback.h"
 #include "pycore_hashtable.h"
-#include <pycore_frame.h>
-
-#include <stdlib.h>               // malloc()
+#include "frameobject.h"          // PyFrame_GetBack()
 
 #include "clinic/_tracemalloc.c.h"
-
 /*[clinic input]
 module _tracemalloc
 [clinic start generated code]*/
@@ -302,16 +299,18 @@ hashtable_compare_traceback(const void *key1, const void *key2)
 
 
 static void
-tracemalloc_get_frame(InterpreterFrame *pyframe, frame_t *frame)
+tracemalloc_get_frame(PyFrameObject *pyframe, frame_t *frame)
 {
     frame->filename = unknown_filename;
-    int lineno = PyCode_Addr2Line(pyframe->f_code, pyframe->f_lasti*sizeof(_Py_CODEUNIT));
+    int lineno = PyFrame_GetLineNumber(pyframe);
     if (lineno < 0) {
         lineno = 0;
     }
     frame->lineno = (unsigned int)lineno;
 
-    PyObject *filename = pyframe->f_code->co_filename;
+    PyCodeObject *code = PyFrame_GetCode(pyframe);
+    PyObject *filename = code->co_filename;
+    Py_DECREF(code);
 
     if (filename == NULL) {
 #ifdef TRACE_DEBUG
@@ -319,6 +318,10 @@ tracemalloc_get_frame(InterpreterFrame *pyframe, frame_t *frame)
 #endif
         return;
     }
+
+    assert(filename != NULL);
+    if (filename == NULL)
+        return;
 
     if (!PyUnicode_Check(filename)) {
 #ifdef TRACE_DEBUG
@@ -396,7 +399,7 @@ traceback_get_frames(traceback_t *traceback)
         return;
     }
 
-    InterpreterFrame *pyframe = tstate->cframe->current_frame;
+    PyFrameObject *pyframe = PyThreadState_GetFrame(tstate);
     for (; pyframe != NULL;) {
         if (traceback->nframe < _Py_tracemalloc_config.max_nframe) {
             tracemalloc_get_frame(pyframe, &traceback->frames[traceback->nframe]);
@@ -407,7 +410,8 @@ traceback_get_frames(traceback_t *traceback)
             traceback->total_nframe++;
         }
 
-        InterpreterFrame *back = pyframe->previous;
+        PyFrameObject *back = PyFrame_GetBack(pyframe);
+        Py_DECREF(pyframe);
         pyframe = back;
     }
 }
@@ -836,7 +840,7 @@ tracemalloc_clear_filename(void *value)
 static void
 tracemalloc_clear_traces(void)
 {
-    /* The GIL protects variables against concurrent access */
+    /* The GIL protects variables againt concurrent access */
     assert(PyGILState_Check());
 
     TABLES_LOCK();
@@ -1199,7 +1203,7 @@ tracemalloc_copy_trace(_Py_hashtable_t *traces,
     trace_t *trace = (trace_t *)value;
 
     trace_t *trace2 = raw_malloc(sizeof(trace_t));
-    if (trace2 == NULL) {
+    if (traces2 == NULL) {
         return -1;
     }
     *trace2 = *trace;
@@ -1639,30 +1643,6 @@ _tracemalloc_get_traced_memory_impl(PyObject *module)
     return Py_BuildValue("nn", size, peak_size);
 }
 
-/*[clinic input]
-_tracemalloc.reset_peak
-
-Set the peak size of memory blocks traced by tracemalloc to the current size.
-
-Do nothing if the tracemalloc module is not tracing memory allocations.
-
-[clinic start generated code]*/
-
-static PyObject *
-_tracemalloc_reset_peak_impl(PyObject *module)
-/*[clinic end generated code: output=140c2870f691dbb2 input=18afd0635066e9ce]*/
-{
-    if (!_Py_tracemalloc_config.tracing) {
-        Py_RETURN_NONE;
-    }
-
-    TABLES_LOCK();
-    tracemalloc_peak_traced_memory = tracemalloc_traced_memory;
-    TABLES_UNLOCK();
-
-    Py_RETURN_NONE;
-}
-
 
 static PyMethodDef module_methods[] = {
     _TRACEMALLOC_IS_TRACING_METHODDEF
@@ -1674,7 +1654,6 @@ static PyMethodDef module_methods[] = {
     _TRACEMALLOC_GET_TRACEBACK_LIMIT_METHODDEF
     _TRACEMALLOC_GET_TRACEMALLOC_MEMORY_METHODDEF
     _TRACEMALLOC_GET_TRACED_MEMORY_METHODDEF
-    _TRACEMALLOC_RESET_PEAK_METHODDEF
     /* sentinel */
     {NULL, NULL}
 };

@@ -5,7 +5,6 @@ import unittest
 import urllib.robotparser
 from test import support
 from test.support import socket_helper
-from test.support import threading_helper
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 
@@ -331,7 +330,7 @@ class PasswordProtectedSiteTestCase(unittest.TestCase):
         self.t.join()
         self.server.server_close()
 
-    @threading_helper.reap_threads
+    @support.reap_threads
     def testPasswordProtectedSite(self):
         addr = self.server.server_address
         url = 'http://' + socket_helper.HOST + ':' + str(addr[1])

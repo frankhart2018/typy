@@ -22,13 +22,13 @@ Floating Point Objects
 .. c:function:: int PyFloat_Check(PyObject *p)
 
    Return true if its argument is a :c:type:`PyFloatObject` or a subtype of
-   :c:type:`PyFloatObject`.  This function always succeeds.
+   :c:type:`PyFloatObject`.
 
 
 .. c:function:: int PyFloat_CheckExact(PyObject *p)
 
    Return true if its argument is a :c:type:`PyFloatObject`, but not a subtype of
-   :c:type:`PyFloatObject`.  This function always succeeds.
+   :c:type:`PyFloatObject`.
 
 
 .. c:function:: PyObject* PyFloat_FromString(PyObject *str)

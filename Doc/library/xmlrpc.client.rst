@@ -169,6 +169,12 @@ between conformable Python objects and XML on the wire.
    `XML-RPC Specification <http://xmlrpc.scripting.com/spec.html>`_
       The official specification.
 
+   `Unofficial XML-RPC Errata <http://effbot.org/zone/xmlrpc-errata.htm>`_
+      Fredrik Lundh's "unofficial errata, intended to clarify certain
+      details in the XML-RPC specification, as well as hint at
+      'best practices' to use when designing your own XML-RPC
+      implementations."
+
 .. _serverproxy-objects:
 
 ServerProxy Objects
@@ -372,7 +378,7 @@ Fault Objects
 
    .. attribute:: faultCode
 
-      An int indicating the fault type.
+      A string indicating the fault type.
 
 
    .. attribute:: faultString

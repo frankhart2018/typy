@@ -44,7 +44,7 @@ static void
 Xxo_dealloc(XxoObject *self)
 {
     Py_XDECREF(self->x_attr);
-    PyObject_Free(self);
+    PyObject_Del(self);
 }
 
 static PyObject *

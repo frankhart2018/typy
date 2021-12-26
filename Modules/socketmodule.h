@@ -8,7 +8,9 @@
 #   include <sys/socket.h>
 # endif
 # include <netinet/in.h>
-# include <netinet/tcp.h>
+# if !defined(__CYGWIN__)
+#  include <netinet/tcp.h>
+# endif
 
 #else /* MS_WINDOWS */
 # include <winsock2.h>
@@ -340,8 +342,7 @@ typedef struct {
 
 */
 
-/* C API for usage by other Python modules.
- * Always add new things to the end for binary compatibility. */
+/* C API for usage by other Python modules */
 typedef struct {
     PyTypeObject *Sock_Type;
     PyObject *error;

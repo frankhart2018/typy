@@ -30,7 +30,7 @@ module and class level attributes within the scope of a test, along with
 some examples of how to use :class:`Mock`, :class:`MagicMock` and
 :func:`patch`.
 
-Mock is designed for use with :mod:`unittest` and
+Mock is very easy to use and is designed for use with :mod:`unittest`. Mock
 is based on the 'action -> assertion' pattern instead of 'record -> replay'
 used by many mocking frameworks.
 
@@ -262,10 +262,9 @@ the *new_callable* argument to :func:`patch`.
       this is a new Mock (created on first access). See the
       :attr:`return_value` attribute.
 
-    * *unsafe*: By default, accessing any attribute whose name starts with
-      *assert*, *assret*, *asert*, *aseert* or *assrt* will raise an
-      :exc:`AttributeError`. Passing ``unsafe=True`` will allow access to
-      these attributes.
+    * *unsafe*: By default if any attribute starts with *assert* or
+      *assret* will raise an :exc:`AttributeError`. Passing ``unsafe=True``
+      will allow access to these attributes.
 
       .. versionadded:: 3.5
 
@@ -328,8 +327,8 @@ the *new_callable* argument to :func:`patch`.
 
     .. method:: assert_called_once_with(*args, **kwargs)
 
-       Assert that the mock was called exactly once and that call was with the
-       specified arguments.
+       Assert that the mock was called exactly once and that that call was
+       with the specified arguments.
 
             >>> mock = Mock(return_value=None)
             >>> mock('foo', bar='baz')
@@ -647,9 +646,6 @@ the *new_callable* argument to :func:`patch`.
         These are tuples, so they can be unpacked to get at the individual
         arguments and make more complex assertions. See
         :ref:`calls as tuples <calls-as-tuples>`.
-
-        .. versionchanged:: 3.8
-           Added ``args`` and ``kwargs`` properties.
 
 
     .. attribute:: call_args_list
@@ -1516,7 +1512,7 @@ attribute in a class) that does not exist will fail with :exc:`AttributeError`::
     >>> test()
     Traceback (most recent call last):
       ...
-    AttributeError: <module 'sys' (built-in)> does not have the attribute 'non_existing_attribute'
+    AttributeError: <module 'sys' (built-in)> does not have the attribute 'non_existing'
 
 but adding ``create=True`` in the call to :func:`patch` will make the previous example
 work as expected::
@@ -2020,7 +2016,7 @@ The full list of supported magic methods is:
 * Context manager: ``__enter__``, ``__exit__``, ``__aenter__`` and ``__aexit__``
 * Unary numeric methods: ``__neg__``, ``__pos__`` and ``__invert__``
 * The numeric methods (including right hand and in-place variants):
-  ``__add__``, ``__sub__``, ``__mul__``, ``__matmul__``, ``__truediv__``,
+  ``__add__``, ``__sub__``, ``__mul__``, ``__matmul__``, ``__div__``, ``__truediv__``,
   ``__floordiv__``, ``__mod__``, ``__divmod__``, ``__lshift__``,
   ``__rshift__``, ``__and__``, ``__xor__``, ``__or__``, and ``__pow__``
 * Numeric conversion methods: ``__complex__``, ``__int__``, ``__float__``
@@ -2208,7 +2204,7 @@ In this example we monkey patch ``method`` to return ``sentinel.some_object``:
     >>> real.method.return_value = sentinel.some_object
     >>> result = real.method()
     >>> assert result is sentinel.some_object
-    >>> result
+    >>> sentinel.some_object
     sentinel.some_object
 
 

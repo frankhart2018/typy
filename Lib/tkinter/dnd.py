@@ -108,7 +108,7 @@ __all__ = ["dnd_start", "DndHandler"]
 
 def dnd_start(source, event):
     h = DndHandler(source, event)
-    if h.root is not None:
+    if h.root:
         return h
     else:
         return None
@@ -143,7 +143,7 @@ class DndHandler:
     def __del__(self):
         root = self.root
         self.root = None
-        if root is not None:
+        if root:
             try:
                 del root.__dnd
             except AttributeError:
@@ -154,25 +154,25 @@ class DndHandler:
         target_widget = self.initial_widget.winfo_containing(x, y)
         source = self.source
         new_target = None
-        while target_widget is not None:
+        while target_widget:
             try:
                 attr = target_widget.dnd_accept
             except AttributeError:
                 pass
             else:
                 new_target = attr(source, event)
-                if new_target is not None:
+                if new_target:
                     break
             target_widget = target_widget.master
         old_target = self.target
         if old_target is new_target:
-            if old_target is not None:
+            if old_target:
                 old_target.dnd_motion(source, event)
         else:
-            if old_target is not None:
+            if old_target:
                 self.target = None
                 old_target.dnd_leave(source, event)
-            if new_target is not None:
+            if new_target:
                 new_target.dnd_enter(source, event)
                 self.target = new_target
 
@@ -193,7 +193,7 @@ class DndHandler:
             self.initial_widget.unbind("<Motion>")
             widget['cursor'] = self.save_cursor
             self.target = self.source = self.initial_widget = self.root = None
-            if target is not None:
+            if target:
                 if commit:
                     target.dnd_commit(source, event)
                 else:
@@ -215,9 +215,9 @@ class Icon:
         if canvas is self.canvas:
             self.canvas.coords(self.id, x, y)
             return
-        if self.canvas is not None:
+        if self.canvas:
             self.detach()
-        if canvas is None:
+        if not canvas:
             return
         label = tkinter.Label(canvas, text=self.name,
                               borderwidth=2, relief="raised")
@@ -229,7 +229,7 @@ class Icon:
 
     def detach(self):
         canvas = self.canvas
-        if canvas is None:
+        if not canvas:
             return
         id = self.id
         label = self.label

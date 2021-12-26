@@ -89,8 +89,6 @@ import os as _os
 import re as _re
 import sys as _sys
 
-import warnings
-
 from gettext import gettext as _, ngettext
 
 SUPPRESS = '==SUPPRESS=='
@@ -394,9 +392,6 @@ class HelpFormatter(object):
         group_actions = set()
         inserts = {}
         for group in groups:
-            if not group._group_actions:
-                raise ValueError(f'empty group {group}')
-
             try:
                 start = actions.index(group._group_actions[0])
             except ValueError:
@@ -531,13 +526,12 @@ class HelpFormatter(object):
         parts = [action_header]
 
         # if there was help for the action, add lines of help text
-        if action.help and action.help.strip():
+        if action.help:
             help_text = self._expand_help(action)
-            if help_text:
-                help_lines = self._split_lines(help_text, help_width)
-                parts.append('%*s%s\n' % (indent_first, '', help_lines[0]))
-                for line in help_lines[1:]:
-                    parts.append('%*s%s\n' % (help_position, '', line))
+            help_lines = self._split_lines(help_text, help_width)
+            parts.append('%*s%s\n' % (indent_first, '', help_lines[0]))
+            for line in help_lines[1:]:
+                parts.append('%*s%s\n' % (help_position, '', line))
 
         # or add a newline if the description doesn't end with one
         elif not action_header.endswith('\n'):
@@ -733,8 +727,6 @@ def _get_action_name(argument):
         return argument.metavar
     elif argument.dest not in (None, SUPPRESS):
         return argument.dest
-    elif argument.choices:
-        return '{' + ','.join(argument.choices) + '}'
     else:
         return None
 
@@ -861,11 +853,11 @@ class Action(_AttributeHolder):
     def __call__(self, parser, namespace, values, option_string=None):
         raise NotImplementedError(_('.__call__() not defined'))
 
-
 class BooleanOptionalAction(Action):
     def __init__(self,
                  option_strings,
                  dest,
+                 const=None,
                  default=None,
                  type=None,
                  choices=None,
@@ -882,7 +874,7 @@ class BooleanOptionalAction(Action):
                 _option_strings.append(option_string)
 
         if help is not None and default is not None:
-            help += " (default: %(default)s)"
+            help += f" (default: {default})"
 
         super().__init__(
             option_strings=_option_strings,
@@ -943,7 +935,7 @@ class _StoreConstAction(Action):
     def __init__(self,
                  option_strings,
                  dest,
-                 const=None,
+                 const,
                  default=None,
                  required=False,
                  help=None,
@@ -1038,7 +1030,7 @@ class _AppendConstAction(Action):
     def __init__(self,
                  option_strings,
                  dest,
-                 const=None,
+                 const,
                  default=None,
                  required=False,
                  help=None,
@@ -1650,14 +1642,6 @@ class _ArgumentGroup(_ActionsContainer):
         super(_ArgumentGroup, self)._remove_action(action)
         self._group_actions.remove(action)
 
-    def add_argument_group(self, *args, **kwargs):
-        warnings.warn(
-            "Nesting argument groups is deprecated.",
-            category=DeprecationWarning,
-            stacklevel=2
-        )
-        return super().add_argument_group(*args, **kwargs)
-
 
 class _MutuallyExclusiveGroup(_ArgumentGroup):
 
@@ -1677,14 +1661,6 @@ class _MutuallyExclusiveGroup(_ArgumentGroup):
     def _remove_action(self, action):
         self._container._remove_action(action)
         self._group_actions.remove(action)
-
-    def add_mutually_exclusive_group(self, *args, **kwargs):
-        warnings.warn(
-            "Nesting mutually exclusive groups is deprecated.",
-            category=DeprecationWarning,
-            stacklevel=2
-        )
-        return super().add_mutually_exclusive_group(*args, **kwargs)
 
 
 class ArgumentParser(_AttributeHolder, _ActionsContainer):
@@ -1744,7 +1720,7 @@ class ArgumentParser(_AttributeHolder, _ActionsContainer):
 
         add_group = self.add_argument_group
         self._positionals = add_group(_('positional arguments'))
-        self._optionals = add_group(_('options'))
+        self._optionals = add_group(_('optional arguments'))
         self._subparsers = None
 
         # register types

@@ -1,12 +1,16 @@
 /* List object implementation */
 
 #include "Python.h"
-#include "pycore_abstract.h"      // _PyIndex_Check()
-#include "pycore_interp.h"        // PyInterpreterState.list
-#include "pycore_list.h"          // struct _Py_list_state
-#include "pycore_object.h"        // _PyObject_GC_TRACK()
-#include "pycore_tuple.h"         // _PyTuple_FromArray()
+#include "pycore_abstract.h"   // _PyIndex_Check()
+#include "pycore_object.h"
+#include "pycore_tupleobject.h"
+#include "pycore_accu.h"
+
+#ifdef STDC_HEADERS
 #include <stddef.h>
+#else
+#include <sys/types.h>          /* For size_t */
+#endif
 
 /*[clinic input]
 class list "PyListObject *" "&PyList_Type"
@@ -14,16 +18,6 @@ class list "PyListObject *" "&PyList_Type"
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=f9b222678f9f71e0]*/
 
 #include "clinic/listobject.c.h"
-
-#if PyList_MAXFREELIST > 0
-static struct _Py_list_state *
-get_list_state(void)
-{
-    PyInterpreterState *interp = _PyInterpreterState_GET();
-    return &interp->list;
-}
-#endif
-
 
 /* Ensure ob_item has room for at least newsize elements, and set
  * ob_size to newsize.  If newsize > ob_size on entry, the content
@@ -66,7 +60,7 @@ list_resize(PyListObject *self, Py_ssize_t newsize)
      *       is PY_SSIZE_T_MAX * (9 / 8) + 6 which always fits in a size_t.
      */
     new_allocated = ((size_t)newsize + (newsize >> 3) + 6) & ~(size_t)3;
-    /* Do not overallocate if the new size is closer to overallocated size
+    /* Do not overallocate if the new size is closer to overalocated size
      * than to the old size.
      */
     if (newsize - Py_SIZE(self) > (Py_ssize_t)(new_allocated - newsize))
@@ -102,39 +96,43 @@ list_preallocate_exact(PyListObject *self, Py_ssize_t size)
     return 0;
 }
 
+/* Empty list reuse scheme to save calls to malloc and free */
+#ifndef PyList_MAXFREELIST
+#  define PyList_MAXFREELIST 80
+#endif
+
+/* bpo-40521: list free lists are shared by all interpreters. */
+#ifdef EXPERIMENTAL_ISOLATED_SUBINTERPRETERS
+#  undef PyList_MAXFREELIST
+#  define PyList_MAXFREELIST 0
+#endif
+
+static PyListObject *free_list[PyList_MAXFREELIST];
+static int numfree = 0;
+
 void
-_PyList_ClearFreeList(PyInterpreterState *interp)
+_PyList_ClearFreeList(void)
 {
-#if PyList_MAXFREELIST > 0
-    struct _Py_list_state *state = &interp->list;
-    while (state->numfree) {
-        PyListObject *op = state->free_list[--state->numfree];
+    while (numfree) {
+        PyListObject *op = free_list[--numfree];
         assert(PyList_CheckExact(op));
         PyObject_GC_Del(op);
     }
-#endif
 }
 
 void
-_PyList_Fini(PyInterpreterState *interp)
+_PyList_Fini(void)
 {
-    _PyList_ClearFreeList(interp);
-#if defined(Py_DEBUG) && PyList_MAXFREELIST > 0
-    struct _Py_list_state *state = &interp->list;
-    state->numfree = -1;
-#endif
+    _PyList_ClearFreeList();
 }
 
 /* Print summary info about the state of the optimized allocator */
 void
 _PyList_DebugMallocStats(FILE *out)
 {
-#if PyList_MAXFREELIST > 0
-    struct _Py_list_state *state = get_list_state();
     _PyDebugAllocatorStats(out,
                            "free PyListObject",
-                           state->numfree, sizeof(PyListObject));
-#endif
+                           numfree, sizeof(PyListObject));
 }
 
 PyObject *
@@ -146,29 +144,17 @@ PyList_New(Py_ssize_t size)
         PyErr_BadInternalCall();
         return NULL;
     }
-
-#if PyList_MAXFREELIST > 0
-    struct _Py_list_state *state = get_list_state();
-#ifdef Py_DEBUG
-    // PyList_New() must not be called after _PyList_Fini()
-    assert(state->numfree != -1);
-#endif
-    if (PyList_MAXFREELIST && state->numfree) {
-        state->numfree--;
-        op = state->free_list[state->numfree];
+    if (numfree) {
+        numfree--;
+        op = free_list[numfree];
         _Py_NewReference((PyObject *)op);
-    }
-    else
-#endif
-    {
+    } else {
         op = PyObject_GC_New(PyListObject, &PyList_Type);
-        if (op == NULL) {
+        if (op == NULL)
             return NULL;
-        }
     }
-    if (size <= 0) {
+    if (size <= 0)
         op->ob_item = NULL;
-    }
     else {
         op->ob_item = (PyObject **) PyMem_Calloc(size, sizeof(PyObject *));
         if (op->ob_item == NULL) {
@@ -185,10 +171,9 @@ PyList_New(Py_ssize_t size)
 static PyObject *
 list_new_prealloc(Py_ssize_t size)
 {
-    assert(size > 0);
     PyListObject *op = (PyListObject *) PyList_New(0);
-    if (op == NULL) {
-        return NULL;
+    if (size == 0 || op == NULL) {
+        return (PyObject *) op;
     }
     assert(op->ob_item == NULL);
     op->ob_item = PyMem_New(PyObject *, size);
@@ -276,8 +261,12 @@ ins1(PyListObject *self, Py_ssize_t where, PyObject *v)
         PyErr_BadInternalCall();
         return -1;
     }
+    if (n == PY_SSIZE_T_MAX) {
+        PyErr_SetString(PyExc_OverflowError,
+            "cannot add more objects to list");
+        return -1;
+    }
 
-    assert((size_t)n + 1 < PY_SSIZE_T_MAX);
     if (list_resize(self, n+1) < 0)
         return -1;
 
@@ -312,7 +301,12 @@ app1(PyListObject *self, PyObject *v)
     Py_ssize_t n = PyList_GET_SIZE(self);
 
     assert (v != NULL);
-    assert((size_t)n + 1 < PY_SSIZE_T_MAX);
+    if (n == PY_SSIZE_T_MAX) {
+        PyErr_SetString(PyExc_OverflowError,
+            "cannot add more objects to list");
+        return -1;
+    }
+
     if (list_resize(self, n+1) < 0)
         return -1;
 
@@ -347,22 +341,12 @@ list_dealloc(PyListObject *op)
         while (--i >= 0) {
             Py_XDECREF(op->ob_item[i]);
         }
-        PyMem_Free(op->ob_item);
+        PyMem_FREE(op->ob_item);
     }
-#if PyList_MAXFREELIST > 0
-    struct _Py_list_state *state = get_list_state();
-#ifdef Py_DEBUG
-    // list_dealloc() must not be called after _PyList_Fini()
-    assert(state->numfree != -1);
-#endif
-    if (state->numfree < PyList_MAXFREELIST && PyList_CheckExact(op)) {
-        state->free_list[state->numfree++] = op;
-    }
+    if (numfree < PyList_MAXFREELIST && PyList_CheckExact(op))
+        free_list[numfree++] = op;
     else
-#endif
-    {
         Py_TYPE(op)->tp_free((PyObject *)op);
-    }
     Py_TRASHCAN_END
 }
 
@@ -468,9 +452,6 @@ list_slice(PyListObject *a, Py_ssize_t ilow, Py_ssize_t ihigh)
     PyObject **src, **dest;
     Py_ssize_t i, len;
     len = ihigh - ilow;
-    if (len <= 0) {
-        return PyList_New(0);
-    }
     np = (PyListObject *) list_new_prealloc(len);
     if (np == NULL)
         return NULL;
@@ -522,11 +503,9 @@ list_concat(PyListObject *a, PyObject *bb)
         return NULL;
     }
 #define b ((PyListObject *)bb)
-    assert((size_t)Py_SIZE(a) + (size_t)Py_SIZE(b) < PY_SSIZE_T_MAX);
+    if (Py_SIZE(a) > PY_SSIZE_T_MAX - Py_SIZE(b))
+        return PyErr_NoMemory();
     size = Py_SIZE(a) + Py_SIZE(b);
-    if (size == 0) {
-        return PyList_New(0);
-    }
     np = (PyListObject *) list_new_prealloc(size);
     if (np == NULL) {
         return NULL;
@@ -607,7 +586,7 @@ _list_clear(PyListObject *a)
         while (--i >= 0) {
             Py_XDECREF(item[i]);
         }
-        PyMem_Free(item);
+        PyMem_FREE(item);
     }
     /* Never fails; the return value can be ignored.
        Note that there is no guarantee that the list is actually empty
@@ -683,7 +662,7 @@ list_ass_slice(PyListObject *a, Py_ssize_t ilow, Py_ssize_t ihigh, PyObject *v)
     /* If norig == 0, item might be NULL, in which case we may not memcpy from it. */
     if (s) {
         if (s > sizeof(recycle_on_stack)) {
-            recycle = (PyObject **)PyMem_Malloc(s);
+            recycle = (PyObject **)PyMem_MALLOC(s);
             if (recycle == NULL) {
                 PyErr_NoMemory();
                 goto Error;
@@ -721,7 +700,7 @@ list_ass_slice(PyListObject *a, Py_ssize_t ilow, Py_ssize_t ihigh, PyObject *v)
     result = 0;
  Error:
     if (recycle != recycle_on_stack)
-        PyMem_Free(recycle);
+        PyMem_FREE(recycle);
     Py_XDECREF(v_as_SF);
     return result;
 #undef b
@@ -1147,11 +1126,12 @@ sortslice_advance(sortslice *slice, Py_ssize_t n)
            if (k)
 
 /* The maximum number of entries in a MergeState's pending-runs stack.
- * For a list with n elements, this needs at most floor(log2(n)) + 1 entries
- * even if we didn't force runs to a minimal length.  So the number of bits
- * in a Py_ssize_t is plenty large enough for all cases.
+ * This is enough to sort arrays of size up to about
+ *     32 * phi ** MAX_MERGE_PENDING
+ * where phi ~= 1.618.  85 is ridiculouslylarge enough, good for an array
+ * with 2**64 elements.
  */
-#define MAX_MERGE_PENDING (SIZEOF_SIZE_T * 8)
+#define MAX_MERGE_PENDING 85
 
 /* When we get into galloping mode, we stay there until both runs win less
  * often than MIN_GALLOP consecutive times.  See listsort.txt for more info.
@@ -1166,8 +1146,7 @@ sortslice_advance(sortslice *slice, Py_ssize_t n)
  */
 struct s_slice {
     sortslice base;
-    Py_ssize_t len;   /* length of run */
-    int power; /* node "level" for powersort merge strategy */
+    Py_ssize_t len;
 };
 
 typedef struct s_MergeState MergeState;
@@ -1177,9 +1156,6 @@ struct s_MergeState {
      * random data, and lower for highly structured data.
      */
     Py_ssize_t min_gallop;
-
-    Py_ssize_t listlen;     /* len(input_list) - read only */
-    PyObject **basekeys;    /* base address of keys array - read only */
 
     /* 'a' is temp storage to help with merges.  It contains room for
      * alloced entries.
@@ -1216,13 +1192,6 @@ struct s_MergeState {
      * of tuples. It may be set to safe_object_compare, but the idea is that hopefully
      * we can assume more, and use one of the special-case compares. */
     int (*tuple_elem_compare)(PyObject *, PyObject *, MergeState *);
-
-    /* Used by unsafe_tuple_compare to record whether the very first tuple
-     * elements resolved the last comparison attempt. If so, next time a
-     * method that may avoid PyObject_RichCompareBool() entirely is tried.
-     * 0 for false, 1 for true.
-     */
-    int first_tuple_items_resolved_it;
 };
 
 /* binarysort is the best method for sorting small arrays: it does
@@ -1531,8 +1500,7 @@ fail:
 
 /* Conceptually a MergeState's constructor. */
 static void
-merge_init(MergeState *ms, Py_ssize_t list_size, int has_keyfunc,
-           sortslice *lo)
+merge_init(MergeState *ms, Py_ssize_t list_size, int has_keyfunc)
 {
     assert(ms != NULL);
     if (has_keyfunc) {
@@ -1557,8 +1525,6 @@ merge_init(MergeState *ms, Py_ssize_t list_size, int has_keyfunc,
     ms->a.keys = ms->temparray;
     ms->n = 0;
     ms->min_gallop = MIN_GALLOP;
-    ms->listlen = list_size;
-    ms->basekeys = lo->keys;
 }
 
 /* Free all the temp memory owned by the MergeState.  This must be called
@@ -1941,74 +1907,37 @@ merge_at(MergeState *ms, Py_ssize_t i)
         return merge_hi(ms, ssa, na, ssb, nb);
 }
 
-/* Two adjacent runs begin at index s1. The first run has length n1, and
- * the second run (starting at index s1+n1) has length n2. The list has total
- * length n.
- * Compute the "power" of the first run. See listsort.txt for details.
- */
-static int
-powerloop(Py_ssize_t s1, Py_ssize_t n1, Py_ssize_t n2, Py_ssize_t n)
-{
-    int result = 0;
-    assert(s1 >= 0);
-    assert(n1 > 0 && n2 > 0);
-    assert(s1 + n1 + n2 <= n);
-    /* midpoints a and b:
-     * a = s1 + n1/2
-     * b = s1 + n1 + n2/2 = a + (n1 + n2)/2
-     *
-     * Those may not be integers, though, because of the "/2". So we work with
-     * 2*a and 2*b instead, which are necessarily integers. It makes no
-     * difference to the outcome, since the bits in the expansion of (2*i)/n
-     * are merely shifted one position from those of i/n.
-     */
-    Py_ssize_t a = 2 * s1 + n1;  /* 2*a */
-    Py_ssize_t b = a + n1 + n2;  /* 2*b */
-    /* Emulate a/n and b/n one bit a time, until bits differ. */
-    for (;;) {
-        ++result;
-        if (a >= n) {  /* both quotient bits are 1 */
-            assert(b >= a);
-            a -= n;
-            b -= n;
-        }
-        else if (b >= n) {  /* a/n bit is 0, b/n bit is 1 */
-            break;
-        } /* else both quotient bits are 0 */
-        assert(a < b && b < n);
-        a <<= 1;
-        b <<= 1;
-    }
-    return result;
-}
-
-/* The next run has been identified, of length n2.
- * If there's already a run on the stack, apply the "powersort" merge strategy:
- * compute the topmost run's "power" (depth in a conceptual binary merge tree)
- * and merge adjacent runs on the stack with greater power. See listsort.txt
- * for more info.
+/* Examine the stack of runs waiting to be merged, merging adjacent runs
+ * until the stack invariants are re-established:
  *
- * It's the caller's responsibility to push the new run on the stack when this
- * returns.
+ * 1. len[-3] > len[-2] + len[-1]
+ * 2. len[-2] > len[-1]
+ *
+ * See listsort.txt for more info.
  *
  * Returns 0 on success, -1 on error.
  */
 static int
-found_new_run(MergeState *ms, Py_ssize_t n2)
+merge_collapse(MergeState *ms)
 {
+    struct s_slice *p = ms->pending;
+
     assert(ms);
-    if (ms->n) {
-        assert(ms->n > 0);
-        struct s_slice *p = ms->pending;
-        Py_ssize_t s1 = p[ms->n - 1].base.keys - ms->basekeys; /* start index */
-        Py_ssize_t n1 = p[ms->n - 1].len;
-        int power = powerloop(s1, n1, n2, ms->listlen);
-        while (ms->n > 1 && p[ms->n - 2].power > power) {
-            if (merge_at(ms, ms->n - 2) < 0)
+    while (ms->n > 1) {
+        Py_ssize_t n = ms->n - 2;
+        if ((n > 0 && p[n-1].len <= p[n].len + p[n+1].len) ||
+            (n > 1 && p[n-2].len <= p[n-1].len + p[n].len)) {
+            if (p[n-1].len < p[n+1].len)
+                --n;
+            if (merge_at(ms, n) < 0)
                 return -1;
         }
-        assert(ms->n < 2 || p[ms->n - 2].power < power);
-        p[ms->n - 1].power = power;
+        else if (p[n].len <= p[n+1].len) {
+            if (merge_at(ms, n) < 0)
+                return -1;
+        }
+        else
+            break;
     }
     return 0;
 }
@@ -2082,7 +2011,7 @@ safe_object_compare(PyObject *v, PyObject *w, MergeState *ms)
     return PyObject_RichCompareBool(v, w, Py_LT);
 }
 
-/* Homogeneous compare: safe for any two comparable objects of the same type.
+/* Homogeneous compare: safe for any two compareable objects of the same type.
  * (ms->key_richcompare is set to ob_type->tp_richcompare in the
  *  pre-sort check.)
  */
@@ -2193,24 +2122,7 @@ unsafe_float_compare(PyObject *v, PyObject *w, MergeState *ms)
  * using the same pre-sort check as we use for ms->key_compare,
  * but run on the list [x[0] for x in L]. This allows us to optimize compares
  * on two levels (as long as [x[0] for x in L] is type-homogeneous.) The idea is
- * that most tuple compares don't involve x[1:].
- * However, that may not be right. When it is right, we can win by calling the
- * relatively cheap ms->tuple_elem_compare on the first pair of elements, to
- * see whether v[0] < w[0] or w[0] < v[0]. If either are so, we're done.
- * Else we proceed as in the tuple compare, comparing the remaining pairs via
- * the probably more expensive PyObject_RichCompareBool(..., Py_EQ) until (if
- * ever) that says "no, not equal!". Then, if we're still on the first pair,
- * ms->tuple_elem_compare can resolve it, else PyObject_RichCompareBool(...,
- * Py_LT) finishes the job.
- * In any case, ms->first_tuple_items_resolved_it keeps track of whether the
- * most recent tuple comparison was resolved by the first pair. If so, the
- * next attempt starts by trying the cheap tests on the first pair again, else
- * PyObject_RichCompareBool(..., Py_EQ) is used from the start.
- * There are cases where PyObject_RichCompareBool(..., Py_EQ) is much cheaper!
- * For example, that can return "almost immediately" if passed the same
- * object twice (it special-cases object identity for Py_EQ), which can,
- * potentially, be unboundedly faster than ms->tuple_elem_compare.
- */
+ * that most tuple compares don't involve x[1:]. */
 static int
 unsafe_tuple_compare(PyObject *v, PyObject *w, MergeState *ms)
 {
@@ -2226,52 +2138,26 @@ unsafe_tuple_compare(PyObject *v, PyObject *w, MergeState *ms)
 
     vt = (PyTupleObject *)v;
     wt = (PyTupleObject *)w;
-    i = 0;
-    if (ms->first_tuple_items_resolved_it) {
-        /* See whether fast compares of the first elements settle it. */
-        k = ms->tuple_elem_compare(vt->ob_item[0], wt->ob_item[0], ms);
-        if (k) /* error, or v < w */
-            return k;
-        k = ms->tuple_elem_compare(wt->ob_item[0], vt->ob_item[0], ms);
-        if (k > 0) /* w < v */
-            return 0;
-        if (k < 0) /* error */
-            return -1;
-        /* We have
-         *     not (v[0] < w[0]) and not (w[0] < v[0])
-         * which implies, for a total order, that the first elements are
-         * equal. So skip them in the loop.
-         */
-        i = 1;
-        ms->first_tuple_items_resolved_it = 0;
-    }
-    /* Now first_tuple_items_resolved_it was 0 on entry, or was forced to 0
-     * at the end of the `if` block just above.
-     */
-    assert(! ms->first_tuple_items_resolved_it);
 
     vlen = Py_SIZE(vt);
     wlen = Py_SIZE(wt);
-    for (; i < vlen && i < wlen; i++) {
+
+    for (i = 0; i < vlen && i < wlen; i++) {
         k = PyObject_RichCompareBool(vt->ob_item[i], wt->ob_item[i], Py_EQ);
-        if (!k) { /* not equal */
-            if (i) {
-                return PyObject_RichCompareBool(vt->ob_item[i], wt->ob_item[i],
-                                                Py_LT);
-            }
-            else {
-                ms->first_tuple_items_resolved_it = 1;
-                return ms->tuple_elem_compare(vt->ob_item[0], wt->ob_item[0],
-                                              ms);
-            }
-        }
         if (k < 0)
             return -1;
+        if (!k)
+            break;
     }
-    /* all equal until we fell off the end */
-    return vlen < wlen;
 
- }
+    if (i >= vlen || i >= wlen)
+        return vlen < wlen;
+
+    if (i == 0)
+        return ms->tuple_elem_compare(vt->ob_item[i], wt->ob_item[i], ms);
+    else
+        return PyObject_RichCompareBool(vt->ob_item[i], wt->ob_item[i], Py_LT);
+}
 
 /* An adaptive, stable, natural mergesort.  See listsort.txt.
  * Returns Py_None on success, NULL on error.  Even in case of error, the
@@ -2338,7 +2224,7 @@ list_sort_impl(PyListObject *self, PyObject *keyfunc, int reverse)
             /* Leverage stack space we allocated but won't otherwise use */
             keys = &ms.temparray[saved_ob_size+1];
         else {
-            keys = PyMem_Malloc(sizeof(PyObject *) * saved_ob_size);
+            keys = PyMem_MALLOC(sizeof(PyObject *) * saved_ob_size);
             if (keys == NULL) {
                 PyErr_NoMemory();
                 goto keyfunc_fail;
@@ -2351,7 +2237,7 @@ list_sort_impl(PyListObject *self, PyObject *keyfunc, int reverse)
                 for (i=i-1 ; i>=0 ; i--)
                     Py_DECREF(keys[i]);
                 if (saved_ob_size >= MERGESTATE_TEMP_SIZE/2)
-                    PyMem_Free(keys);
+                    PyMem_FREE(keys);
                 goto keyfunc_fail;
             }
         }
@@ -2454,12 +2340,11 @@ list_sort_impl(PyListObject *self, PyObject *keyfunc, int reverse)
             }
 
             ms.key_compare = unsafe_tuple_compare;
-            ms.first_tuple_items_resolved_it = 1; /* be optimistic */
         }
     }
     /* End of pre-sort check: ms is now set properly! */
 
-    merge_init(&ms, saved_ob_size, keys != NULL, &lo);
+    merge_init(&ms, saved_ob_size, keys != NULL);
 
     nremaining = saved_ob_size;
     if (nremaining < 2)
@@ -2495,16 +2380,13 @@ list_sort_impl(PyListObject *self, PyObject *keyfunc, int reverse)
                 goto fail;
             n = force;
         }
-        /* Maybe merge pending runs. */
-        assert(ms.n == 0 || ms.pending[ms.n -1].base.keys +
-                            ms.pending[ms.n-1].len == lo.keys);
-        if (found_new_run(&ms, n) < 0)
-            goto fail;
-        /* Push new run on stack. */
+        /* Push run onto pending-runs stack, and maybe merge. */
         assert(ms.n < MAX_MERGE_PENDING);
         ms.pending[ms.n].base = lo;
         ms.pending[ms.n].len = n;
         ++ms.n;
+        if (merge_collapse(&ms) < 0)
+            goto fail;
         /* Advance to find next run. */
         sortslice_advance(&lo, n);
         nremaining -= n;
@@ -2526,7 +2408,7 @@ fail:
         for (i = 0; i < saved_ob_size; i++)
             Py_DECREF(keys[i]);
         if (saved_ob_size >= MERGESTATE_TEMP_SIZE/2)
-            PyMem_Free(keys);
+            PyMem_FREE(keys);
     }
 
     if (self->allocated != -1 && result != NULL) {
@@ -2554,7 +2436,7 @@ keyfunc_fail:
         while (--i >= 0) {
             Py_XDECREF(final_ob_item[i]);
         }
-        PyMem_Free(final_ob_item);
+        PyMem_FREE(final_ob_item);
     }
     Py_XINCREF(result);
     return result;
@@ -2902,7 +2784,7 @@ static PyMethodDef list_methods[] = {
     LIST_COUNT_METHODDEF
     LIST_REVERSE_METHODDEF
     LIST_SORT_METHODDEF
-    {"__class_getitem__", Py_GenericAlias, METH_O|METH_CLASS, PyDoc_STR("See PEP 585")},
+    {"__class_getitem__", (PyCFunction)Py_GenericAlias, METH_O|METH_CLASS, PyDoc_STR("See PEP 585")},
     {NULL,              NULL}           /* sentinel */
 };
 
@@ -3020,7 +2902,7 @@ list_ass_subscript(PyListObject* self, PyObject* item, PyObject* value)
             }
 
             garbage = (PyObject**)
-                PyMem_Malloc(slicelength*sizeof(PyObject*));
+                PyMem_MALLOC(slicelength*sizeof(PyObject*));
             if (!garbage) {
                 PyErr_NoMemory();
                 return -1;
@@ -3061,7 +2943,7 @@ list_ass_subscript(PyListObject* self, PyObject* item, PyObject* value)
             for (i = 0; i < slicelength; i++) {
                 Py_DECREF(garbage[i]);
             }
-            PyMem_Free(garbage);
+            PyMem_FREE(garbage);
 
             return res;
         }
@@ -3102,7 +2984,7 @@ list_ass_subscript(PyListObject* self, PyObject* item, PyObject* value)
             }
 
             garbage = (PyObject**)
-                PyMem_Malloc(slicelength*sizeof(PyObject*));
+                PyMem_MALLOC(slicelength*sizeof(PyObject*));
             if (!garbage) {
                 Py_DECREF(seq);
                 PyErr_NoMemory();
@@ -3123,7 +3005,7 @@ list_ass_subscript(PyListObject* self, PyObject* item, PyObject* value)
                 Py_DECREF(garbage[i]);
             }
 
-            PyMem_Free(garbage);
+            PyMem_FREE(garbage);
             Py_DECREF(seq);
 
             return 0;
@@ -3164,8 +3046,7 @@ PyTypeObject PyList_Type = {
     0,                                          /* tp_setattro */
     0,                                          /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
-        Py_TPFLAGS_BASETYPE | Py_TPFLAGS_LIST_SUBCLASS |
-        _Py_TPFLAGS_MATCH_SELF | Py_TPFLAGS_SEQUENCE,  /* tp_flags */
+        Py_TPFLAGS_BASETYPE | Py_TPFLAGS_LIST_SUBCLASS, /* tp_flags */
     list___init____doc__,                       /* tp_doc */
     (traverseproc)list_traverse,                /* tp_traverse */
     (inquiry)_list_clear,                       /* tp_clear */

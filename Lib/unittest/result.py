@@ -183,8 +183,7 @@ class TestResult(object):
         else:
             length = None
         tb_e = traceback.TracebackException(
-            exctype, value, tb,
-            limit=length, capture_locals=self.tb_locals, compact=True)
+            exctype, value, tb, limit=length, capture_locals=self.tb_locals)
         msgLines = list(tb_e.format())
 
         if self.buffer:

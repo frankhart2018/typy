@@ -1,8 +1,8 @@
-/* Format bytes as hexadecimal */
+/* bytes to hex implementation */
 
 #include "Python.h"
-#include "pycore_strhex.h"        // _Py_strhex_with_sep()
-#include <stdlib.h>               // abs()
+
+#include "pystrhex.h"
 
 static PyObject *_Py_strhex_impl(const char* argbuf, const Py_ssize_t arglen,
                                  const PyObject* sep, int bytes_per_sep_group,

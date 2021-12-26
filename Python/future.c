@@ -1,5 +1,11 @@
 #include "Python.h"
-#include "pycore_ast.h"           // _PyAST_GetDocString()
+#include "Python-ast.h"
+#include "node.h"
+#include "token.h"
+#include "graminit.h"
+#include "code.h"
+#include "symtable.h"
+#include "ast.h"
 
 #define UNDEFINED_FUTURE_FEATURE "future feature %.100s is not defined"
 #define ERR_LATE_FUTURE \
@@ -9,10 +15,11 @@ static int
 future_check_features(PyFutureFeatures *ff, stmt_ty s, PyObject *filename)
 {
     int i;
+    asdl_seq *names;
 
     assert(s->kind == ImportFrom_kind);
 
-    asdl_alias_seq *names = s->v.ImportFrom.names;
+    names = s->v.ImportFrom.names;
     for (i = 0; i < asdl_seq_LEN(names); i++) {
         alias_ty name = (alias_ty)asdl_seq_GET(names, i);
         const char *feature = PyUnicode_AsUTF8(name->name);
@@ -116,7 +123,7 @@ future_parse(PyFutureFeatures *ff, mod_ty mod, PyObject *filename)
 
 
 PyFutureFeatures *
-_PyFuture_FromAST(mod_ty mod, PyObject *filename)
+PyFuture_FromASTObject(mod_ty mod, PyObject *filename)
 {
     PyFutureFeatures *ff;
 
@@ -132,5 +139,20 @@ _PyFuture_FromAST(mod_ty mod, PyObject *filename)
         PyObject_Free(ff);
         return NULL;
     }
+    return ff;
+}
+
+
+PyFutureFeatures *
+PyFuture_FromAST(mod_ty mod, const char *filename_str)
+{
+    PyFutureFeatures *ff;
+    PyObject *filename;
+
+    filename = PyUnicode_DecodeFSDefault(filename_str);
+    if (filename == NULL)
+        return NULL;
+    ff = PyFuture_FromASTObject(mod, filename);
+    Py_DECREF(filename);
     return ff;
 }

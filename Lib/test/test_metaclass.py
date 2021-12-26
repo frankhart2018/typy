@@ -1,7 +1,3 @@
-import doctest
-import unittest
-
-
 doctests = """
 
 Basic class construction.
@@ -260,10 +256,10 @@ if hasattr(sys, 'gettrace') and sys.gettrace():
 else:
     __test__ = {'doctests' : doctests}
 
-def load_tests(loader, tests, pattern):
-    tests.addTest(doctest.DocTestSuite())
-    return tests
-
+def test_main(verbose=False):
+    from test import support
+    from test import test_metaclass
+    support.run_doctest(test_metaclass, verbose)
 
 if __name__ == "__main__":
-    unittest.main()
+    test_main(verbose=True)

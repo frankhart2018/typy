@@ -46,9 +46,6 @@ module.  See module :mod:`glob` for pathname expansion (:mod:`glob` uses
 a period are not special for this module, and are matched by the ``*`` and ``?``
 patterns.
 
-Also note that :func:`functools.lru_cache` with the *maxsize* of 32768 is used to
-cache the compiled regex patterns in the following functions: :func:`fnmatch`,
-:func:`fnmatchcase`, :func:`filter`.
 
 .. function:: fnmatch(filename, pattern)
 
@@ -78,7 +75,7 @@ cache the compiled regex patterns in the following functions: :func:`fnmatch`,
 
 .. function:: filter(names, pattern)
 
-   Construct a list from those elements of the iterable *names* that match *pattern*. It is the same as
+   Return the subset of the list of *names* that match *pattern*. It is the same as
    ``[n for n in names if fnmatch(n, pattern)]``, but implemented more efficiently.
 
 

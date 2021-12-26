@@ -1,3 +1,4 @@
+LIBRARY	"pyshellext"
 EXPORTS
   DllRegisterServer PRIVATE
   DllUnregisterServer PRIVATE

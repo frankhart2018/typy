@@ -1,6 +1,6 @@
 /*--------------------------------------------------------------------
  * Licensed to PSF under a Contributor Agreement.
- * See https://www.python.org/psf/license for licensing details.
+ * See http://www.python.org/psf/license for licensing details.
  *
  * _elementtree - C accelerator for xml.etree.ElementTree
  * Copyright (c) 1999-2009 by Secret Labs AB.  All rights reserved.
@@ -1393,19 +1393,22 @@ _elementtree_Element_get_impl(ElementObject *self, PyObject *key,
                               PyObject *default_value)
 /*[clinic end generated code: output=523c614142595d75 input=ee153bbf8cdb246e]*/
 {
-    if (self->extra && self->extra->attrib) {
-        PyObject *attrib = self->extra->attrib;
-        Py_INCREF(attrib);
-        PyObject *value = PyDict_GetItemWithError(attrib, key);
-        Py_XINCREF(value);
-        Py_DECREF(attrib);
-        if (value != NULL || PyErr_Occurred()) {
-            return value;
+    PyObject* value;
+
+    if (!self->extra || !self->extra->attrib)
+        value = default_value;
+    else {
+        value = PyDict_GetItemWithError(self->extra->attrib, key);
+        if (!value) {
+            if (PyErr_Occurred()) {
+                return NULL;
+            }
+            value = default_value;
         }
     }
 
-    Py_INCREF(default_value);
-    return default_value;
+    Py_INCREF(value);
+    return value;
 }
 
 static PyObject *
@@ -2037,7 +2040,7 @@ element_attrib_setter(ElementObject *self, PyObject *value, void *closure)
     if (!PyDict_Check(value)) {
         PyErr_Format(PyExc_TypeError,
                      "attrib must be dict, not %.200s",
-                     Py_TYPE(value)->tp_name);
+                     value->ob_type->tp_name);
         return -1;
     }
     if (!self->extra) {

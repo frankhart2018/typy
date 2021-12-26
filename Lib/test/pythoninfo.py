@@ -96,7 +96,6 @@ def collect_sys(info_add):
         'maxunicode',
         'path',
         'platform',
-        'platlibdir',
         'prefix',
         'thread_info',
         'version',
@@ -505,7 +504,7 @@ def collect_ssl(info_add):
     copy_attributes(info_add, ssl, 'ssl.%s', attributes, formatter=format_attr)
 
     for name, ctx in (
-        ('SSLContext', ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)),
+        ('SSLContext', ssl.SSLContext()),
         ('default_https_context', ssl._create_default_https_context()),
         ('stdlib_context', ssl._create_stdlib_context()),
     ):

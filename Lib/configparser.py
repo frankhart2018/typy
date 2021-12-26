@@ -146,12 +146,13 @@ import itertools
 import os
 import re
 import sys
+import warnings
 
 __all__ = ["NoSectionError", "DuplicateOptionError", "DuplicateSectionError",
            "NoOptionError", "InterpolationError", "InterpolationDepthError",
            "InterpolationMissingOptionError", "InterpolationSyntaxError",
            "ParsingError", "MissingSectionHeaderError",
-           "ConfigParser", "RawConfigParser",
+           "ConfigParser", "SafeConfigParser", "RawConfigParser",
            "Interpolation", "BasicInterpolation",  "ExtendedInterpolation",
            "LegacyInterpolation", "SectionProxy", "ConverterMapping",
            "DEFAULTSECT", "MAX_INTERPOLATION_DEPTH"]
@@ -310,6 +311,26 @@ class ParsingError(Error):
         self.source = source
         self.errors = []
         self.args = (source, )
+
+    @property
+    def filename(self):
+        """Deprecated, use `source'."""
+        warnings.warn(
+            "The 'filename' attribute will be removed in future versions.  "
+            "Use 'source' instead.",
+            DeprecationWarning, stacklevel=2
+        )
+        return self.source
+
+    @filename.setter
+    def filename(self, value):
+        """Deprecated, user `source'."""
+        warnings.warn(
+            "The 'filename' attribute will be removed in future versions.  "
+            "Use 'source' instead.",
+            DeprecationWarning, stacklevel=2
+        )
+        self.source = value
 
     def append(self, lineno, line):
         self.errors.append((lineno, line))
@@ -542,7 +563,7 @@ class RawConfigParser(MutableMapping):
     # Regular expressions for parsing section headers and options
     _SECT_TMPL = r"""
         \[                                 # [
-        (?P<header>.+)                     # very permissive!
+        (?P<header>[^]]+)                  # very permissive!
         \]                                 # ]
         """
     _OPT_TMPL = r"""
@@ -669,7 +690,6 @@ class RawConfigParser(MutableMapping):
         """
         if isinstance(filenames, (str, bytes, os.PathLike)):
             filenames = [filenames]
-        encoding = io.text_encoding(encoding)
         read_ok = []
         for filename in filenames:
             try:
@@ -732,6 +752,15 @@ class RawConfigParser(MutableMapping):
                     raise DuplicateOptionError(section, key, source)
                 elements_added.add((section, key))
                 self.set(section, key, value)
+
+    def readfp(self, fp, filename=None):
+        """Deprecated, use read_file instead."""
+        warnings.warn(
+            "This method will be removed in future versions.  "
+            "Use 'parser.read_file()' instead.",
+            DeprecationWarning, stacklevel=2
+        )
+        self.read_file(fp, source=filename)
 
     def get(self, section, option, *, raw=False, vars=None, fallback=_UNSET):
         """Get an option value for a given section.
@@ -878,9 +907,6 @@ class RawConfigParser(MutableMapping):
 
         If `space_around_delimiters' is True (the default), delimiters
         between keys and values are surrounded by spaces.
-
-        Please note that comments in the original configuration file are not
-        preserved when writing the configuration back.
         """
         if space_around_delimiters:
             d = " {} ".format(self._delimiters[0])
@@ -979,7 +1005,7 @@ class RawConfigParser(MutableMapping):
         Configuration files may include comments, prefixed by specific
         characters (`#' and `;' by default). Comments may appear on their own
         in an otherwise empty line or may be entered in lines holding values or
-        section names. Please note that comments get stripped off when reading configuration files.
+        section names.
         """
         elements_added = set()
         cursect = None                        # None, or a dictionary
@@ -1193,6 +1219,19 @@ class ConfigParser(RawConfigParser):
             self.read_dict({self.default_section: defaults})
         finally:
             self._interpolation = hold_interpolation
+
+
+class SafeConfigParser(ConfigParser):
+    """ConfigParser alias for backwards compatibility purposes."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        warnings.warn(
+            "The SafeConfigParser class has been renamed to ConfigParser "
+            "in Python 3.2. This alias will be removed in future versions."
+            " Use ConfigParser directly instead.",
+            DeprecationWarning, stacklevel=2
+        )
 
 
 class SectionProxy(MutableMapping):

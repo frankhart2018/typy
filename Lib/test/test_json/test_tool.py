@@ -6,7 +6,6 @@ import unittest
 import subprocess
 
 from test import support
-from test.support import os_helper
 from test.support.script_helper import assert_python_ok
 
 
@@ -92,7 +91,7 @@ class TestTool(unittest.TestCase):
         self.assertEqual(process.stderr, '')
 
     def _create_infile(self, data=None):
-        infile = os_helper.TESTFN
+        infile = support.TESTFN
         with open(infile, "w", encoding="utf-8") as fp:
             self.addCleanup(os.remove, infile)
             fp.write(data or self.data)
@@ -122,19 +121,10 @@ class TestTool(unittest.TestCase):
 
     def test_infile_outfile(self):
         infile = self._create_infile()
-        outfile = os_helper.TESTFN + '.out'
+        outfile = support.TESTFN + '.out'
         rc, out, err = assert_python_ok('-m', 'json.tool', infile, outfile)
         self.addCleanup(os.remove, outfile)
-        with open(outfile, "r", encoding="utf-8") as fp:
-            self.assertEqual(fp.read(), self.expect)
-        self.assertEqual(rc, 0)
-        self.assertEqual(out, b'')
-        self.assertEqual(err, b'')
-
-    def test_writing_in_place(self):
-        infile = self._create_infile()
-        rc, out, err = assert_python_ok('-m', 'json.tool', infile, infile)
-        with open(infile, "r", encoding="utf-8") as fp:
+        with open(outfile, "r") as fp:
             self.assertEqual(fp.read(), self.expect)
         self.assertEqual(rc, 0)
         self.assertEqual(out, b'')
@@ -199,7 +189,7 @@ class TestTool(unittest.TestCase):
 
     def test_no_ensure_ascii_flag(self):
         infile = self._create_infile('{"key":"💩"}')
-        outfile = os_helper.TESTFN + '.out'
+        outfile = support.TESTFN + '.out'
         self.addCleanup(os.remove, outfile)
         assert_python_ok('-m', 'json.tool', '--no-ensure-ascii', infile, outfile)
         with open(outfile, "rb") as f:
@@ -210,7 +200,7 @@ class TestTool(unittest.TestCase):
 
     def test_ensure_ascii_default(self):
         infile = self._create_infile('{"key":"💩"}')
-        outfile = os_helper.TESTFN + '.out'
+        outfile = support.TESTFN + '.out'
         self.addCleanup(os.remove, outfile)
         assert_python_ok('-m', 'json.tool', infile, outfile)
         with open(outfile, "rb") as f:

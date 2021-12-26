@@ -6,8 +6,7 @@ import warnings
 import zipfile
 from os.path import join
 from textwrap import dedent
-from test.support import captured_stdout, run_unittest
-from test.support.warnings_helper import check_warnings
+from test.support import captured_stdout, check_warnings, run_unittest
 
 try:
     import zlib
@@ -487,7 +486,7 @@ class SDistTestCase(BasePyPIRCCommandTestCase):
             archive.close()
 
 def test_suite():
-    return unittest.TestLoader().loadTestsFromTestCase(SDistTestCase)
+    return unittest.makeSuite(SDistTestCase)
 
 if __name__ == "__main__":
     run_unittest(test_suite())
