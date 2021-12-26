@@ -1,4 +1,4 @@
-This is Python version 3.11.0 alpha 3
+This is TyPy version 0.1 alpha 0
 =====================================
 
 .. image:: https://travis-ci.com/python/cpython.svg?branch=main
